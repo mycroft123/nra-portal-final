@@ -565,9 +565,8 @@ app.get('/members', requireAuth, (req, res) => {
 
 // Serve static files only for authenticated users
 app.use('/public', requireAuth, express.static('public'));
-app.use('/cory.html', requireAuth, express.static('public/cory.html'));
+app.use('/index.html', requireAuth, express.static('public/index.html'));
 app.use('/roi.html', requireAuth, express.static('public/roi.html'));
-app.use('/index.html', requireAuth, express.static('index.html'));
 
 // API Routes (protected)
 app.get('/api/emails', requireAuth, (req, res) => {
