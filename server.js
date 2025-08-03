@@ -567,6 +567,7 @@ app.get('/members', requireAuth, (req, res) => {
 app.use('/public', requireAuth, express.static('public'));
 app.use('/cory.html', requireAuth, express.static('public/cory.html'));
 app.use('/roi.html', requireAuth, express.static('public/roi.html'));
+app.use('/index.html', requireAuth, express.static('index.html'));
 
 // API Routes (protected)
 app.get('/api/emails', requireAuth, (req, res) => {
@@ -606,6 +607,7 @@ app.get('/api/stats', requireAuth, (req, res) => {
         res.status(500).json({ error: 'Summary data not available' });
     }
 });
+
 
 app.get('/api/quick-views', requireAuth, (req, res) => {
     if (emailData.quick_views) {
