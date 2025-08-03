@@ -458,7 +458,7 @@ const portalPage = `
                 style="width: 100%; height: 100%; border: none;"
                 allow="clipboard-write; microphone">
         </iframe>
-        <iframe id="analytics" src="/roi.html"></iframe>
+        <iframe id="analytics" src="/Dashboard1.html"></iframe>
         <iframe id="members" src="/members"></iframe>
     </div>
     
@@ -567,6 +567,7 @@ app.get('/members', requireAuth, (req, res) => {
 app.use('/public', requireAuth, express.static('public'));
 app.use('/index.html', requireAuth, express.static('public/index.html'));
 app.use('/roi.html', requireAuth, express.static('public/roi.html'));
+app.use('/Dashboard1.html', requireAuth, express.static('public/Dashboard1.html'));
 
 // API Routes (protected)
 app.get('/api/emails', requireAuth, (req, res) => {
