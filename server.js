@@ -451,7 +451,7 @@ const portalPage = `
             </div>
         </div>
         
-        <iframe id="emails" src="/cory.html"></iframe>
+        <iframe id="emails" src="/index.html"></iframe>
         <iframe id="anythingllm" 
                 src="{{ANYTHINGLLM_URL}}"
                 frameborder="0"
