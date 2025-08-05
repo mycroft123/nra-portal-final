@@ -882,7 +882,7 @@ app.listen(PORT, () => {
         console.log('✅ OpenAI API key configured');
     }
     
-    const dashboardUrl = process.env.NPR_DASHBOARD_URL || 'http://npr-dashboard.railway.internal';
+    const dashboardUrl = process.env.NPR_DASHBOARD_URL || 'https://npr-dashboard-production.up.railway.app/';
     console.log(`📈 NPR Dashboard proxied from: ${dashboardUrl}`);
     
     if (emailData && emailData.summary) {
