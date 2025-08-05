@@ -495,17 +495,22 @@ function requireAuth(req, res, next) {
     }
 }
 
-// Add proxy for npr-dashboard
-// This routes /npr-dashboard requests to your dashboard service
+// Add proxy for npr-dashboard using public URL
+const nprDashboardUrl = process.env.NPR_DASHBOARD_URL || 'https://npr-dashboard-production.up.railway.app';
+console.log('🔧 NPR Dashboard Proxy Target (Public URL):', nprDashboardUrl);
+
 app.use('/npr-dashboard', requireAuth, createProxyMiddleware({
-    target: process.env.NPR_DASHBOARD_URL || 'http://npr-dashboard.railway.internal',
+    target: nprDashboardUrl,
     changeOrigin: true,
+    secure: true, // For HTTPS
     pathRewrite: {
         '^/npr-dashboard': '', // Remove /npr-dashboard prefix when forwarding
     },
+    headers: {
+        'X-Forwarded-Host': 'nra-portal-final.up.railway.app', // Your portal's domain
+    },
     onProxyReq: (proxyReq, req, res) => {
-        // Log proxy requests for debugging
-        console.log(`Proxying request to NPR Dashboard: ${proxyReq.path}`);
+        console.log(`Proxying to: ${nprDashboardUrl}${proxyReq.path}`);
     },
     onError: (err, req, res) => {
         console.error('NPR Dashboard proxy error:', err);
@@ -882,7 +887,7 @@ app.listen(PORT, () => {
         console.log('✅ OpenAI API key configured');
     }
     
-    const dashboardUrl = process.env.NPR_DASHBOARD_URL || 'https://npr-dashboard-production.up.railway.app/';
+    const dashboardUrl = process.env.NPR_DASHBOARD_URL || 'http://npr-dashboard.railway.internal';
     console.log(`📈 NPR Dashboard proxied from: ${dashboardUrl}`);
     
     if (emailData && emailData.summary) {
