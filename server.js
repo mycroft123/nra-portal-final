@@ -31,9 +31,15 @@ const openai = new OpenAI({
 });
 
 // Simple user store (in production, use a database)
+// Add your users here with username: password format
 const users = {
-    'admin': 'password', // Change these!
-    'user': 'user123'
+    'admin': 'password',      // Change this password!
+    'user': 'user123',        // Change this password!
+    'president': 'nra2024',   // Example: President's account
+    'vp': 'secure456',        // Example: VP account
+    'director': 'dir789',     // Example: Director account
+    'member': 'member2024',   // Example: Member account
+    'ChairmanBB': 'HaveGunWillTravel!' // Chairman's account
 };
 
 // Helper function to extract text from HTML
