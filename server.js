@@ -1,10 +1,11 @@
-// server.js - Combined Enhanced Email Analysis + Login + iFrame Navigation
+// server.js - Combined Enhanced Email Analysis + Login + iFrame Navigation with NPR Dashboard Proxy
 
 const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
 const OpenAI = require('openai');
 const path = require('path');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 require('dotenv').config();
 
 const app = express();
@@ -494,6 +495,64 @@ function requireAuth(req, res, next) {
     }
 }
 
+// Add proxy for npr-dashboard
+// This routes /npr-dashboard requests to your dashboard service
+app.use('/npr-dashboard', requireAuth, createProxyMiddleware({
+    target: process.env.NPR_DASHBOARD_URL || 'http://npr-dashboard.railway.internal',
+    changeOrigin: true,
+    pathRewrite: {
+        '^/npr-dashboard': '', // Remove /npr-dashboard prefix when forwarding
+    },
+    onProxyReq: (proxyReq, req, res) => {
+        // Log proxy requests for debugging
+        console.log(`Proxying request to NPR Dashboard: ${proxyReq.path}`);
+    },
+    onError: (err, req, res) => {
+        console.error('NPR Dashboard proxy error:', err);
+        res.status(500).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Dashboard Error</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background: #f5f5f5;
+                    }
+                    .error {
+                        text-align: center;
+                        color: #666;
+                        padding: 40px;
+                        background: white;
+                        border-radius: 10px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    }
+                    .error h1 {
+                        color: #c41e3a;
+                        margin-bottom: 20px;
+                    }
+                    .error p {
+                        margin-bottom: 10px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="error">
+                    <h1>Dashboard Connection Error</h1>
+                    <p>Unable to connect to the NPR Dashboard.</p>
+                    <p>Please try again later or contact support.</p>
+                </div>
+            </body>
+            </html>
+        `);
+    }
+}));
+
 // Authentication Routes
 app.get('/login', (req, res) => {
     res.send(loginPage.replace('{{ERROR}}', ''));
@@ -607,7 +666,6 @@ app.get('/api/stats', requireAuth, (req, res) => {
         res.status(500).json({ error: 'Summary data not available' });
     }
 });
-
 
 app.get('/api/quick-views', requireAuth, (req, res) => {
     if (emailData.quick_views) {
@@ -807,7 +865,8 @@ app.get('/api/health', (req, res) => {
         openai: process.env.OPENAI_API_KEY ? 'configured' : 'not configured',
         dataLoaded: emailData ? 'yes' : 'no',
         emailCount: emailData?.emails?.length || 0,
-        enhancedAnalysis: emailData?.emails?.[0]?.analysis?.sentiment_category ? 'yes' : 'no'
+        enhancedAnalysis: emailData?.emails?.[0]?.analysis?.sentiment_category ? 'yes' : 'no',
+        nprDashboard: process.env.NPR_DASHBOARD_URL || 'using internal URL'
     });
 });
 
@@ -822,6 +881,9 @@ app.listen(PORT, () => {
     } else {
         console.log('✅ OpenAI API key configured');
     }
+    
+    const dashboardUrl = process.env.NPR_DASHBOARD_URL || 'http://npr-dashboard.railway.internal';
+    console.log(`📈 NPR Dashboard proxied from: ${dashboardUrl}`);
     
     if (emailData && emailData.summary) {
         console.log(`📧 Loaded ${emailData.emails?.length || 0} emails with enhanced AI analysis`);
@@ -838,16 +900,3 @@ app.listen(PORT, () => {
         }
     }
 });
-
-// Updated package.json dependencies needed:
-/*
-{
-  "dependencies": {
-    "express": "^4.18.2",
-    "express-session": "^1.17.3",
-    "cors": "^2.8.5",
-    "openai": "^4.0.0",
-    "dotenv": "^16.0.3"
-  }
-}
-*/
