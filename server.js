@@ -458,7 +458,7 @@ const portalPage = `
                 style="width: 100%; height: 100%; border: none;"
                 allow="clipboard-write; microphone">
         </iframe>
-        <iframe id="analytics" src="/Dashboard1.html"></iframe>
+        <iframe id="analytics" src="/npr-dashboard"></iframe>
         <iframe id="members" src="/members"></iframe>
     </div>
     
