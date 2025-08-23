@@ -19,7 +19,7 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'nra-portal-secret-change-this',
     resave: false,
     saveUninitialized: false,
-    cookie: { 
+    cookie: {
         secure: false, // Set to true if using HTTPS
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
@@ -56,7 +56,7 @@ function extractTextFromHTML(html) {
         .replace(/&#39;/g, "'")
         .replace(/\s+/g, ' ')
         .trim();
-    
+
     return text;
 }
 
@@ -64,7 +64,7 @@ function extractTextFromHTML(html) {
 let emailData = null;
 try {
     const fs = require('fs');
-    
+
     if (fs.existsSync('./enhanced_email_analysis.json')) {
         const enhancedData = fs.readFileSync('./enhanced_email_analysis.json', 'utf8');
         emailData = JSON.parse(enhancedData);
@@ -571,7 +571,7 @@ app.get('/login', (req, res) => {
 
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
-    
+
     if (users[username] && users[username] === password) {
         req.session.authenticated = true;
         req.session.username = username;
@@ -642,9 +642,9 @@ app.use('/Dashboard1.html', requireAuth, express.static('public/Dashboard1.html'
 // API Routes (protected)
 app.get('/api/emails', requireAuth, (req, res) => {
     if (emailData.emails) {
-        res.json({ 
+        res.json({
             emails: emailData.emails,
-            summary: emailData.summary 
+            summary: emailData.summary
         });
     } else {
         res.status(500).json({ error: 'Email data not loaded' });
@@ -696,21 +696,21 @@ app.get('/api/quick-views', requireAuth, (req, res) => {
 app.get('/api/emails/priority/:level', requireAuth, (req, res) => {
     const level = req.params.level;
     let filtered = [];
-    
+
     if (level === 'high') {
-        filtered = emailData.emails.filter(e => 
+        filtered = emailData.emails.filter(e =>
             e.analysis && e.analysis.priority_score >= 7
         );
     } else if (level === 'medium') {
-        filtered = emailData.emails.filter(e => 
+        filtered = emailData.emails.filter(e =>
             e.analysis && e.analysis.priority_score >= 5 && e.analysis.priority_score < 7
         );
     } else if (level === 'low') {
-        filtered = emailData.emails.filter(e => 
+        filtered = emailData.emails.filter(e =>
             e.analysis && e.analysis.priority_score < 5
         );
     }
-    
+
     res.json({ emails: filtered });
 });
 
@@ -723,25 +723,25 @@ app.get('/api/emails/sentiment/:sentiment', requireAuth, (req, res) => {
         const classification = e.analysis.sentiment?.classification;
         return aiSentiment === sentiment || classification === sentiment;
     });
-    
+
     res.json({ emails: filtered });
 });
 
 app.get('/api/emails/response/:type', requireAuth, (req, res) => {
     const type = req.params.type;
-    const filtered = emailData.emails.filter(e => 
+    const filtered = emailData.emails.filter(e =>
         e.analysis && e.analysis.response_required === type
     );
-    
+
     res.json({ emails: filtered });
 });
 
 app.get('/api/emails/topic/:category', requireAuth, (req, res) => {
     const category = req.params.category;
-    const filtered = emailData.emails.filter(e => 
+    const filtered = emailData.emails.filter(e =>
         e.analysis && e.analysis.topic_category === category
     );
-    
+
     res.json({ emails: filtered });
 });
 
@@ -757,10 +757,10 @@ app.get('/api/senders/:email', requireAuth, (req, res) => {
 app.post('/api/chat', requireAuth, async (req, res) => {
     try {
         const { message } = req.body;
-        
+
         if (!process.env.OPENAI_API_KEY) {
-            return res.status(500).json({ 
-                error: 'OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file.' 
+            return res.status(500).json({
+                error: 'OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file.'
             });
         }
 
@@ -776,7 +776,7 @@ app.post('/api/chat', requireAuth, async (req, res) => {
             }));
 
         const distributions = emailData.summary?.distributions || {};
-        
+
         const emailContext = `You are analyzing emails from NRA members with enhanced AI analysis.
         
         Summary Statistics:
@@ -786,23 +786,23 @@ app.post('/api/chat', requireAuth, async (req, res) => {
         
         Sentiment Distribution:
         ${Object.entries(distributions.by_sentiment || {})
-            .map(([sentiment, count]) => `- ${sentiment}: ${count}`)
-            .join('\n')}
+                .map(([sentiment, count]) => `- ${sentiment}: ${count}`)
+                .join('\n')}
         
         Priority Distribution:
         ${Object.entries(distributions.by_priority || {})
-            .map(([priority, count]) => `- ${priority}: ${count}`)
-            .join('\n')}
+                .map(([priority, count]) => `- ${priority}: ${count}`)
+                .join('\n')}
         
         Topic Categories:
         ${Object.entries(distributions.by_topic || {})
-            .map(([topic, count]) => `- ${topic}: ${count}`)
-            .join('\n')}
+                .map(([topic, count]) => `- ${topic}: ${count}`)
+                .join('\n')}
         
         High Priority Emails (7+):
-        ${highPriorityEmails.map(e => 
-            `- "${e.subject}" from ${e.sender} (Priority: ${e.priority.toFixed(1)}, ${e.sentiment}, Response: ${e.response_required}) - ${e.summary}`
-        ).join('\n')}
+        ${highPriorityEmails.map(e =>
+                    `- "${e.subject}" from ${e.sender} (Priority: ${e.priority.toFixed(1)}, ${e.sentiment}, Response: ${e.response_required}) - ${e.summary}`
+                ).join('\n')}
         
         Quick Views Summary:
         - Fires to Put Out: ${emailData.quick_views?.fires_to_put_out?.length || 0} critical issues
@@ -828,21 +828,21 @@ app.post('/api/chat', requireAuth, async (req, res) => {
             max_tokens: 500
         });
 
-        res.json({ 
-            response: completion.choices[0].message.content 
+        res.json({
+            response: completion.choices[0].message.content
         });
 
     } catch (error) {
         console.error('OpenAI API Error:', error);
-        res.status(500).json({ 
-            error: 'Failed to get AI response. Please check your OpenAI API key.' 
+        res.status(500).json({
+            error: 'Failed to get AI response. Please check your OpenAI API key.'
         });
     }
 });
 
 app.get('/api/action-items', requireAuth, (req, res) => {
     const actionItems = [];
-    
+
     emailData.emails.forEach(email => {
         if (email.analysis && email.analysis.action_items && email.analysis.action_items.length > 0) {
             email.analysis.action_items.forEach(item => {
@@ -858,7 +858,7 @@ app.get('/api/action-items', requireAuth, (req, res) => {
             });
         }
     });
-    
+
     actionItems.sort((a, b) => {
         const priorityOrder = { high: 0, medium: 1, low: 2 };
         if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
@@ -866,13 +866,13 @@ app.get('/api/action-items', requireAuth, (req, res) => {
         }
         return 0;
     });
-    
+
     res.json({ actionItems });
 });
 
 app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
+    res.json({
+        status: 'ok',
         openai: process.env.OPENAI_API_KEY ? 'configured' : 'not configured',
         dataLoaded: emailData ? 'yes' : 'no',
         emailCount: emailData?.emails?.length || 0,
@@ -881,27 +881,276 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+app.post('/api/ai/compose', async (req, res) => {
+    try {
+        const { prompt, tone } = req.body;
+
+        if (!prompt) {
+            return res.json({ success: false, error: 'Prompt is required' });
+        }
+
+        // const systemPrompt = `You are an AI assistant helping to compose professional emails for the NRA leadership. 
+        // Create a well-structured, ${tone} email based on the user's request. 
+        // Keep it appropriate for organizational communications and maintain a professional tone while being ${tone}.
+        // Format the email with proper greeting, body, and closing.
+
+        // Guidelines:
+        // - Use appropriate salutation (Dear [Name] or Dear Members)
+        // - Create clear, well-organized paragraphs
+        // - Include a professional closing
+        // - Keep the tone ${tone} but always professional
+        // - Make it suitable for organizational leadership communication
+
+        // Output Format:
+        // - Response should always be in valid JSON object format with the following fields:
+        // - Subject: [Subject Line]
+        // - Body: [Email Body]
+        // - Closing: [Closing Line]
+        // - Tone: [Tone of the email]
+        // - Response Required: [Yes or No]
+        // - Priority Score: [Priority Score]
+        // - Sentiment: [Sentiment of the email]
+        // - Topic: [Topic of the email]
+        // - Sender: [Sender of the email]
+        // - Recipient: [Recipient of the email]
+        // - Date: [Date of the email]
+        // - Time: [Time of the email]
+        // - Example:
+        // {
+        //     "subject": "Subject Line",
+        //     "body": "Email Body",
+        //     "closing": "Closing Line",
+        //     "tone": "Tone of the email",
+        //     "responseRequired": "Yes or No",
+        //     "priorityScore": "Priority Score",
+        //     "sentiment": "Sentiment of the email",
+        //     "topic": "Topic of the email",
+        //     "sender": "Sender of the email",
+        //     "recipient": "Recipient of the email",
+        //     "date": "Date of the email",
+        //     "time": "Time of the email"
+        // }
+        // - Example:
+        // {
+        //     "subject": "Subject Line",
+        //     "body": "Email Body",
+        //     "closing": "Closing Line",
+        //     "tone": "Tone of the email",
+        //     "responseRequired": "Yes or No",
+        //     "priorityScore": "Priority Score",
+        //     "sentiment": "Sentiment of the email",
+        //     "topic": "Topic of the email",
+        //     "sender": "Sender of the email",
+        //     "recipient": "Recipient of the email",
+        //     "date": "Date of the email",
+        //     "time": "Time of the email"
+        // }
+        // - Example:
+        // {
+        //     "subject": "Subject Line",
+        //     "body": "Email Body",
+        //     "closing": "Closing Line",
+        //     "tone": "Tone of the email",
+        //     "responseRequired": "Yes or No",
+        //     "priorityScore": "Priority Score",
+        //     "sentiment": "Sentiment of the email",
+        //     "topic": "Topic of the email",
+        //     "sender": "Sender of the email",
+        //     "recipient": "Recipient of the email",
+        //     "date": "Date of the email",
+        //     "time": "Time of the email"
+        // }
+        // - Example:
+        // {
+        //     "subject": "Subject Line",
+        //     "body": "Email Body",
+        //     "closing": "Closing Line",
+        //     "tone": "Tone of the email",
+        //     "responseRequired": "Yes or No",
+        //     "priorityScore": "Priority Score",
+        //     "sentiment": "Sentiment of the email",
+        //     "topic": "Topic of the email",
+        //     "sender": "Sender of the email",
+        //     "recipient": "Recipient of the email",
+        //     "date": "Date of the email",
+        //     "time": "Time of the email"
+        // }
+        // `;
+
+        const systemPrompt = `
+                                Developer: You are an AI assistant tasked with composing professional emails for NRA leadership.
+
+                                Begin with a concise checklist (3-7 bullets) of your intended actions before generating the output.
+
+                                # Objective
+                                - Generate well-structured organizational emails with a tone matching the provided ${tone} variable, or default to "professional" if missing or invalid.
+
+                                # Instructions
+                                - Always begin with an appropriate salutation, such as "Dear [Name]" or "Dear Members".
+                                - Construct the email body using clear, concise, and logically-organized paragraphs.
+                                - Conclude with a professional closing.
+                                - Ensure all content meets standards for professionalism and appropriateness for leadership and organizational communication.
+                                - Respect the user's requested tone (${tone}); fallback to "professional" if the input is missing or malformed.
+                                - If information for any required output field is not provided, leave that field blank using the placeholder format [Your Field Name], e.g., [Your Name].
+
+                                # Output Format
+                                - Your response must be a valid JSON object containing these fields in the specified order:
+                                - subject: string (subject line of the email)
+                                - body: string (full email body)
+                                - closing: string (professional closing line)
+                                - tone: string (one of [professional, formal, friendly, persuasive, urgent, informational])
+                                - responseRequired: string (exactly "Yes" or "No")
+                                - priorityScore: integer (between 1 and 5, inclusive)
+                                - sentiment: string ([positive, neutral, negative])
+                                - topic: string (main topic summary)
+                                - sender: string (name or title of sender)
+                                - recipient: string (name(s) or title of recipient(s))
+                                - date: string (ISO 8601, YYYY-MM-DD)
+                                - time: string (24-hour, HH:MM)
+
+                                Include an # Output Format section specifying exact fields and types. Ensure your output is a valid JSON object matching this format and using exhaustive, descriptive field values. If information for any required field is not provided, leave that field blank in the format [Your Field Name].
+
+                                # Verbosity
+                                - Email content should be clear and concise.
+                                - Output JSON must use high verbosity: descriptive field names, full information per field.
+
+                                # Stop Condition
+                                - Complete and return only when all required JSON output fields are populated as specified (use placeholders [Your Field Name] as needed if information is missing).
+                            `;
+
+        const completion = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: prompt }
+            ],
+            max_tokens: 500,
+            temperature: 0.7,
+            response_format: { type: "json_object" }
+        });
+
+        const draft = completion.choices[0].message.content;
+
+        res.json({
+            success: true,
+            draft: draft
+        });
+
+    } catch (error) {
+        console.error('AI Compose Error:', error);
+        res.json({
+            success: false,
+            error: 'Failed to generate email draft. Please check your OpenAI API key configuration.'
+        });
+    }
+});
+
+// AI Queue API
+app.get('/api/ai/queue', requireAuth, (req, res) => {
+    // TODO:
+    // 1. Fetch the queue items from the database
+    // 2. Return the queue items
+    res.json({ success: true, queue: [] });
+});
+
+app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
+    try {
+        const { type, content, originalEmail, metadata } = req.body;
+        // TODO:
+        // 1. Save the queue item to the database
+        const queueItem = {
+            id: Date.now() + Math.random(),
+            type: type,
+            content: content,
+            originalEmail: originalEmail,
+            metadata: metadata,
+            status: 'ready',
+            timestamp: new Date().toISOString(),
+            userId: req.session.username
+        };
+
+        // TODO:
+        // 2. Send the email via email service
+
+        res.json({
+            success: true,
+            item: queueItem
+        });
+
+    } catch (error) {
+        console.error('AI Queue Add Error:', error);
+        res.json({
+            success: false,
+            error: 'Failed to add item to queue'
+        });
+    }
+});
+
+app.post('/api/ai/queue/send/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // TODO:
+        // 1. Fetch the queue item from database
+        // 2. Send the actual email via email service
+        // 3. Remove from queue or mark as sent
+
+        res.json({
+            success: true,
+            message: 'Email sent successfully'
+        });
+
+    } catch (error) {
+        console.error('AI Queue Send Error:', error);
+        res.json({
+            success: false,
+            error: 'Failed to send email'
+        });
+    }
+});
+
+app.delete('/api/ai/queue/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // TODO:
+        // 1. Remove the queue item from the database
+
+        res.json({
+            success: true,
+            message: 'Item removed from queue'
+        });
+
+    } catch (error) {
+        console.error('AI Queue Delete Error:', error);
+        res.json({
+            success: false,
+            error: 'Failed to remove item from queue'
+        });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`🎯 NRA Portal Server running on http://localhost:${PORT}`);
     console.log(`📊 Portal available at http://localhost:${PORT}/portal`);
-    
+
     if (!process.env.OPENAI_API_KEY) {
         console.warn('⚠️  Warning: OPENAI_API_KEY not found in environment variables');
         console.warn('   AI chat features will not work without it');
     } else {
         console.log('✅ OpenAI API key configured');
     }
-    
+
     const dashboardUrl = process.env.NPR_DASHBOARD_URL || 'http://npr-dashboard.railway.internal';
     console.log(`📈 NPR Dashboard proxied from: ${dashboardUrl}`);
-    
+
     if (emailData && emailData.summary) {
         console.log(`📧 Loaded ${emailData.emails?.length || 0} emails with enhanced AI analysis`);
         console.log(`⚡ Average priority score: ${emailData.summary.overview?.average_priority || 0}`);
         console.log(`🎯 Emails requiring action: ${emailData.summary.overview?.requiring_response || 0}`);
         console.log(`🔥 Critical issues: ${emailData.summary.overview?.critical_issues || 0}`);
-        
+
         if (emailData.quick_views) {
             console.log('\n📋 Quick Views:');
             console.log(`  🔥 Fires to Put Out: ${emailData.quick_views.fires_to_put_out?.length || 0}`);
