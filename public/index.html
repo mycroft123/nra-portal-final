@@ -2600,6 +2600,10 @@
         .ai-edit-reject:hover {
             background: #545b62;
         }
+
+        #draftContent>div.fr-wrapper:has(> div:nth-child(2))>div:nth-child(1) {
+            display: none;
+        }
     </style>
 </head>
 
@@ -6147,20 +6151,6 @@
                         timestamp: new Date(Date.now() - 1800000).toISOString()
                     });
                 }, 1000);
-            });
-
-            function hidePurchaseLicenseMessage() {
-                const wrapper = document.querySelector('.fr-wrapper');
-                if (wrapper) {
-                    const banner = wrapper.querySelector('a[href*="froala.com/wysiwyg-editor"]');
-                    if (banner && banner.parentElement) {
-                        banner.parentElement.style.display = 'none';
-                    }
-                }
-            }
-
-            document.addEventListener('DOMContentLoaded', () => {
-                hidePurchaseLicenseMessage();
             });
         </script>
 </body>
