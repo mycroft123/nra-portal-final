@@ -1643,6 +1643,53 @@
             border: 1px solid #edebe9;
             border-radius: 8px;
             overflow: hidden;
+            position: relative;
+        }
+
+        /* Ensure Froala toolbar stays within the draft section */
+        .compose-draft-section .fr-toolbar {
+            position: relative !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            z-index: 10 !important;
+            margin: 0 !important;
+            transform: none !important;
+        }
+
+        .compose-draft-section .fr-box {
+            position: relative;
+            overflow: visible;
+        }
+
+        /* Prevent toolbar from floating outside modal */
+        .compose-modal .fr-toolbar.fr-top {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            transform: none !important;
+        }
+
+        /* Ensure the editor wrapper doesn't overflow */
+        .compose-draft-section .fr-wrapper {
+            overflow: visible;
+        }
+
+        /* Additional constraints for Froala editor within draft section */
+        .compose-draft-section {
+            contain: layout;
+        }
+
+        .compose-draft-section .fr-toolbar {
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+
+        /* Ensure modal body contains the editor properly */
+        .compose-modal-body {
+            position: relative;
+            contain: layout;
         }
 
         .compose-draft-header {
@@ -5104,6 +5151,8 @@
                 ],
                 heightMin: 300,
                 placeholderText: 'Your AI-generated draft will appear here...',
+                toolbarSticky: false,
+                toolbarStickyOffset: 0,
                 pastePlain: false,
                 pasteAllowedStyleProps: ['color', 'font-size', 'background-color', 'font-family', 'text-align'],
                 pasteDeniedTags: ['style', 'script', 'iframe', 'object', 'embed', 'link', 'meta'],
