@@ -6421,8 +6421,10 @@
         const originalSendEmail = window.sendEmail;
         window.sendEmail = function () {
             const currentContent = getCurrentEditorContent();
-            const prompt = document.getElementById('composePrompt').value;
-            const tone = document.getElementById('toneSelector').value;
+            const promptElement = document.getElementById('composePrompt');
+            const toneElement = document.getElementById('toneSelector');
+            const prompt = promptElement ? promptElement.value : '';
+            const tone = toneElement ? toneElement.value : 'professional';
 
             if (!currentContent.trim()) {
                 alert('Please generate a draft first.');
