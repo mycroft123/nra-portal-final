@@ -881,6 +881,109 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+app.post('/api/ai/reply', requireAuth, async (req, res) => {
+    try {
+        const { originalEmail, tone = 'professional' } = req.body;
+
+        if (!originalEmail) {
+            return res.json({ success: false, error: 'Original email data is required' });
+        }
+
+        if (!process.env.OPENAI_API_KEY) {
+            return res.status(500).json({
+                error: 'OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file.'
+            });
+        }
+
+        // Extract sender name from email address
+        function extractNameFromEmail(email) {
+            const username = email.split('@')[0];
+            return username
+                .replace(/[._-]/g, ' ')
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+        }
+
+        // Extract relevant context from the original email
+        const emailContext = {
+            subject: originalEmail.subject,
+            sender: originalEmail.sender,
+            senderName: extractNameFromEmail(originalEmail.sender),
+            content: originalEmail.clean_text || originalEmail.body,
+            sentiment: originalEmail.analysis?.sentiment_category,
+            priority: originalEmail.analysis?.priority_score,
+            issues: originalEmail.analysis?.specific_topics || [],
+            actionItems: originalEmail.analysis?.action_items || [],
+            summary: originalEmail.analysis?.summary
+        };
+
+        const systemPrompt = `You are Bill Bachenberg, President of the NRA, responding to member communications. 
+        
+        Create a professional, ${tone} email reply that:
+        - Addresses the sender by their name: ${emailContext.senderName}
+        - Acknowledges their specific concerns or points raised
+        - Provides a thoughtful, constructive response
+        - Maintains a ${tone} but respectful tone
+        - Shows appreciation for their membership and feedback
+        - Includes appropriate professional closing
+        - Is suitable for NRA leadership communication
+        
+        Original Email Details:
+        - From: ${emailContext.senderName} (${emailContext.sender})
+        - Subject: ${emailContext.subject}
+        - Sentiment: ${emailContext.sentiment || 'neutral'}
+        - Priority Level: ${emailContext.priority || 'standard'}
+        - Key Issues: ${emailContext.issues.length > 0 ? emailContext.issues.join(', ') : 'general communication'}
+        - Summary: ${emailContext.summary || 'Member communication'}
+        
+        Email Content Preview: ${emailContext.content ? emailContext.content.substring(0, 400) + '...' : 'Content not available'}
+        
+        Generate a complete, professional email reply that directly addresses their message.
+        
+        Return the output in the following JSON format:
+        {
+        "subject": <string, the subject of the reply>,
+        "body": <string, the full body text of the reply>,
+        "to": <string, the recipient's name and email>,
+        "from": <string, the sender information (Bill Bachenberg, President, NRA)>,
+        "closing": <string, professional closing statement>
+        }`;
+
+        const completion = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+                {
+                    role: "system",
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: `Generate a reply to this email from ${emailContext.senderName}. Their main concerns appear to be: ${emailContext.issues.length > 0 ? emailContext.issues.join(', ') : 'general feedback and communication'}.`
+                }
+            ],
+            temperature: 0.7,
+            max_tokens: 600,
+            response_format: { type: "json_object" }
+        });
+
+        const generatedReply = completion.choices[0].message.content;
+
+        res.json({
+            success: true,
+            reply: generatedReply,
+            context: emailContext
+        });
+
+    } catch (error) {
+        console.error('AI Reply Generation Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to generate AI reply. Please try again.'
+        });
+    }
+});
+
 app.post('/api/ai/compose', async (req, res) => {
     try {
         const { prompt, tone } = req.body;
