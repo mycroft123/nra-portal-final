@@ -5275,6 +5275,17 @@
                     document.getElementById('draftSection').style.display = 'block';
                     document.getElementById('regenerateBtn').style.display = 'inline-flex';
                     document.getElementById('sendEmailBtn').disabled = false;
+
+                    // Auto-scroll to the AI Generated Draft section after reply is generated
+                    setTimeout(() => {
+                        const draftSection = document.getElementById('draftSection');
+                        if (draftSection) {
+                            draftSection.scrollIntoView({ 
+                                behavior: 'smooth', 
+                                block: 'start' 
+                            });
+                        }
+                    }, 200); // Small delay to ensure the content is fully rendered
                 } else {
                     alert('Error generating reply: ' + data.error);
                 }
@@ -5322,6 +5333,17 @@
                     document.getElementById('draftSection').style.display = 'block';
                     document.getElementById('regenerateBtn').style.display = 'inline-flex';
                     document.getElementById('sendEmailBtn').disabled = false;
+
+                    // Auto-scroll to the AI Generated Draft section after draft is generated
+                    setTimeout(() => {
+                        const draftSection = document.getElementById('draftSection');
+                        if (draftSection) {
+                            draftSection.scrollIntoView({ 
+                                behavior: 'smooth', 
+                                block: 'start' 
+                            });
+                        }
+                    }, 200); // Small delay to ensure the content is fully rendered
                 } else {
                     alert('Error generating draft: ' + data.error);
                 }
