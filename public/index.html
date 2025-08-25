@@ -6529,9 +6529,20 @@
                 const modalTitle = document.getElementById('composeModalTitle').textContent;
                 const isReply = modalTitle.includes('Reply with AI');
 
+                // Get the subject from the generated draft data if available
+                let subject;
+                if (isReply) {
+                    subject = `Re: ${selectedEmail?.subject || 'Email'}`;
+                } else {
+                    // For compose, try to get subject from emailDraftData, fallback to default
+                    subject = (emailDraftData && emailDraftData.draft && emailDraftData.draft.subject)
+                        ? emailDraftData.draft.subject
+                        : 'AI Generated Email';
+                }
+
                 const queueItem = {
                     type: isReply ? 'reply' : 'compose',
-                    subject: isReply ? `Re: ${selectedEmail?.subject || 'Email'}` : 'AI Generated Email',
+                    subject: subject,
                     aiResponse: currentContent,
                     content: currentContent,
                     originalPrompt: prompt,
