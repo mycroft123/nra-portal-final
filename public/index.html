@@ -6154,107 +6154,6 @@
         };
         let selectedQueueItems = new Set();
 
-        // Local Storage Functions for AI Queue
-        function saveQueueToLocalStorage() {
-            try {
-                localStorage.setItem('nra-ai-queue', JSON.stringify(aiQueue));
-                localStorage.setItem('nra-ai-queue-filters', JSON.stringify(aiQueueFilters));
-                showSaveStatus('Saved to local storage');
-                console.log('AI Queue saved to local storage');
-            } catch (error) {
-                console.error('Error saving AI Queue to local storage:', error);
-                showSaveStatus('Error saving to local storage', true);
-            }
-        }
-
-        function loadQueueFromLocalStorage() {
-            try {
-                const savedQueue = localStorage.getItem('nra-ai-queue');
-                const savedFilters = localStorage.getItem('nra-ai-queue-filters');
-
-                if (savedQueue) {
-                    aiQueue = JSON.parse(savedQueue);
-                    showSaveStatus(`Loaded ${aiQueue.length} items from local storage`);
-                    console.log('AI Queue loaded from local storage:', aiQueue.length, 'items');
-                }
-
-                if (savedFilters) {
-                    aiQueueFilters = { ...aiQueueFilters, ...JSON.parse(savedFilters) };
-                    console.log('AI Queue filters loaded from local storage');
-                }
-            } catch (error) {
-                console.error('Error loading AI Queue from local storage:', error);
-                showSaveStatus('Error loading from local storage', true);
-                aiQueue = [];
-                aiQueueFilters = {
-                    status: 'all',
-                    type: 'all',
-                    priority: 'all'
-                };
-            }
-        }
-
-        function clearQueueFromLocalStorage() {
-            try {
-                localStorage.removeItem('nra-ai-queue');
-                localStorage.removeItem('nra-ai-queue-filters');
-                showSaveStatus('Local storage cleared');
-                console.log('AI Queue cleared from local storage');
-            } catch (error) {
-                console.error('Error clearing AI Queue from local storage:', error);
-                showSaveStatus('Error clearing local storage', true);
-            }
-        }
-
-        function showSaveStatus(message, isError = false) {
-            const statusElement = document.getElementById('saveStatus');
-            if (statusElement) {
-                statusElement.textContent = message;
-                statusElement.style.color = isError ? '#d13438' : '#10c510';
-                statusElement.style.opacity = '1';
-
-                // Hide the status after 3 seconds
-                setTimeout(() => {
-                    statusElement.style.opacity = '0';
-                }, 3000);
-            }
-        }
-
-        function getLocalStorageUsage() {
-            try {
-                const queueData = localStorage.getItem('nra-ai-queue');
-                const filtersData = localStorage.getItem('nra-ai-queue-filters');
-
-                let totalSize = 0;
-                if (queueData) totalSize += queueData.length;
-                if (filtersData) totalSize += filtersData.length;
-
-                // Convert bytes to KB
-                const sizeInKB = (totalSize / 1024).toFixed(1);
-                return sizeInKB;
-            } catch (error) {
-                console.error('Error calculating local storage usage:', error);
-                return '0';
-            }
-        }
-
-        function updateQueueStats() {
-            const totalElement = document.getElementById('aiQueueTotal');
-            const statusElement = document.getElementById('saveStatus');
-
-            if (totalElement) {
-                totalElement.textContent = aiQueue.length;
-            }
-
-            // Show storage usage in status when queue view is active
-            if (statusElement && document.getElementById('ai-queueView').style.display !== 'none') {
-                const storageSize = getLocalStorageUsage();
-                statusElement.innerHTML = `Local storage: ${storageSize} KB`;
-                statusElement.style.opacity = '0.7';
-                statusElement.style.color = '#605e5c';
-            }
-        }
-
         function addToAIQueue(item) {
             if (!item.id) {
                 item.id = Date.now() + Math.random();
@@ -6266,7 +6165,6 @@
 
             aiQueue.unshift(item);
             updateAIQueueCount();
-            saveQueueToLocalStorage();
 
             if (document.getElementById('ai-queueView').style.display !== 'none') {
                 renderAIQueue();
@@ -6278,7 +6176,9 @@
         function updateAIQueueCount() {
             const count = aiQueue.length;
             document.getElementById('aiQueueCount').textContent = count;
-            updateQueueStats();
+            if (document.getElementById('aiQueueTotal')) {
+                document.getElementById('aiQueueTotal').textContent = count;
+            }
         }
 
         function renderAIQueue() {
@@ -6389,7 +6289,6 @@
                 aiQueueFilters.priority = filterValue;
             }
 
-            saveQueueToLocalStorage(); // Save filters to local storage
             renderAIQueue();
         }
 
@@ -6422,20 +6321,10 @@
             }
         }
 
-        function updateQueueItem(itemId, updates) {
-            const itemIndex = aiQueue.findIndex(item => item.id == itemId);
-            if (itemIndex !== -1) {
-                aiQueue[itemIndex] = { ...aiQueue[itemIndex], ...updates };
-                saveQueueToLocalStorage(); // Save to local storage after update
-                renderAIQueue();
-            }
-        }
-
         function dismissAIReply(itemId) {
             aiQueue = aiQueue.filter(item => item.id != itemId);
             selectedQueueItems.delete(itemId);
             updateAIQueueCount();
-            saveQueueToLocalStorage(); // Save to local storage after removal
             renderAIQueue();
         }
 
@@ -6503,7 +6392,6 @@
                 }
 
                 renderAIQueue();
-                updateQueueStats(); // Update stats when viewing queue
             } else {
                 if (originalShowView) {
                     originalShowView(viewName);
@@ -6544,13 +6432,11 @@
             }
 
             if (window.editingQueueItem) {
-                updateQueueItem(window.editingQueueItem, {
-                    aiResponse: currentContent,
-                    content: currentContent,
-                    originalPrompt: prompt,
-                    tone: tone,
-                    lastModified: new Date().toISOString()
-                });
+                const itemIndex = aiQueue.findIndex(item => item.id == window.editingQueueItem);
+                if (itemIndex !== -1) {
+                    aiQueue[itemIndex].aiResponse = currentContent;
+                    aiQueue[itemIndex].content = currentContent;
+                }
                 delete window.editingQueueItem;
             } else {
                 addToAIQueue({
@@ -6569,87 +6455,32 @@
         };
 
         document.addEventListener('DOMContentLoaded', function () {
-            // Load queue from local storage first
-            loadQueueFromLocalStorage();
             updateAIQueueCount();
 
-            // Only add sample data if queue is empty (first time load)
-            if (aiQueue.length === 0) {
-                setTimeout(() => {
-                    addToAIQueue({
-                        type: 'compose',
-                        subject: 'Welcome New Members',
-                        aiResponse: 'Dear Fellow Patriots,\n\nWe are excited to welcome our newest members to the NRA family. Your commitment to defending our Second Amendment rights strengthens our cause...',
-                        originalPrompt: 'Welcome message for new members',
-                        tone: 'professional',
-                        status: 'ready',
-                        timestamp: new Date(Date.now() - 3600000).toISOString() // 1 hour ago
-                    });
+            setTimeout(() => {
+                addToAIQueue({
+                    type: 'compose',
+                    subject: 'Welcome New Members',
+                    aiResponse: 'Dear Fellow Patriots,\n\nWe are excited to welcome our newest members to the NRA family. Your commitment to defending our Second Amendment rights strengthens our cause...',
+                    originalPrompt: 'Welcome message for new members',
+                    tone: 'professional',
+                    status: 'ready',
+                    timestamp: new Date(Date.now() - 3600000).toISOString() // 1 hour ago
+                });
 
-                    addToAIQueue({
-                        type: 'reply',
-                        subject: 'Re: Concerns about recent legislation',
-                        originalEmail: {
-                            from: 'member@example.com',
-                            subject: 'Concerns about recent legislation'
-                        },
-                        aiResponse: 'Thank you for reaching out about your concerns regarding the recent legislation. We share your worries and are actively working...',
-                        status: 'needs-review',
-                        timestamp: new Date(Date.now() - 1800000).toISOString()
-                    });
-                }, 1000);
-            }
-
-            // Apply saved filters to UI if they exist
-            if (aiQueueFilters.status !== 'all' || aiQueueFilters.type !== 'all' || aiQueueFilters.priority !== 'all') {
-                setTimeout(() => {
-                    applyFiltersToUI();
-                }, 1500);
-            }
+                addToAIQueue({
+                    type: 'reply',
+                    subject: 'Re: Concerns about recent legislation',
+                    originalEmail: {
+                        from: 'member@example.com',
+                        subject: 'Concerns about recent legislation'
+                    },
+                    aiResponse: 'Thank you for reaching out about your concerns regarding the recent legislation. We share your worries and are actively working...',
+                    status: 'needs-review',
+                    timestamp: new Date(Date.now() - 1800000).toISOString()
+                });
+            }, 1000);
         });
-
-        function applyFiltersToUI() {
-            // Apply status filter
-            if (aiQueueFilters.status !== 'all') {
-                const statusChips = document.querySelectorAll('.ai-queue-filter-chip[onclick*="status"]');
-                statusChips.forEach(chip => {
-                    if (chip.textContent.toLowerCase().includes(aiQueueFilters.status) ||
-                        chip.getAttribute('onclick').includes(`'${aiQueueFilters.status}'`)) {
-                        chip.classList.add('active');
-                    } else {
-                        chip.classList.remove('active');
-                    }
-                });
-            }
-
-            // Apply type filter
-            if (aiQueueFilters.type !== 'all') {
-                const typeChips = document.querySelectorAll('.ai-queue-filter-chip[onclick*="type"]');
-                typeChips.forEach(chip => {
-                    if (chip.textContent.toLowerCase().includes(aiQueueFilters.type) ||
-                        chip.getAttribute('onclick').includes(`'${aiQueueFilters.type}'`)) {
-                        chip.classList.add('active');
-                    } else {
-                        chip.classList.remove('active');
-                    }
-                });
-            }
-
-            // Apply priority filter
-            if (aiQueueFilters.priority !== 'all') {
-                const priorityChips = document.querySelectorAll('.ai-queue-filter-chip[onclick*="priority"]');
-                priorityChips.forEach(chip => {
-                    if (chip.textContent.toLowerCase().includes(aiQueueFilters.priority) ||
-                        chip.getAttribute('onclick').includes(`'${aiQueueFilters.priority}'`)) {
-                        chip.classList.add('active');
-                    } else {
-                        chip.classList.remove('active');
-                    }
-                });
-            }
-
-            renderAIQueue();
-        }
     </script>
 </body>
 
