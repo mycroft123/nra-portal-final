@@ -7,6 +7,7 @@ const OpenAI = require('openai');
 const path = require('path');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 require('dotenv').config();
+const { query } = require('./DbConnection');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -1149,11 +1150,57 @@ app.post('/api/ai/compose', async (req, res) => {
 });
 
 // AI Queue API
-app.get('/api/ai/queue', requireAuth, (req, res) => {
-    // TODO:
-    // 1. Fetch the queue items from the database
-    // 2. Return the queue items
-    res.json({ success: true, queue: [] });
+app.get('/api/ai/queue', requireAuth, async (req, res) => {
+    try {
+        // TODO:
+        // 1. Fetch the queue items from the database
+        const userId = req.session.username;
+        const { status, type, limit = 50, offset = 0 } = req.query;
+
+        if (!userId) {
+            return res.status(401).json({ error: 'User not authenticated' });
+        }
+
+        let whereConditions = ['user_id = $1'];
+        let queryParams = [userId];
+        let paramCount = 1;
+
+        if (status) {
+            paramCount++;
+            whereConditions.push(`status = $${paramCount}`);
+            queryParams.push(status);
+        }
+
+        if (type) {
+            paramCount++;
+            whereConditions.push(`type = $${paramCount}`);
+            queryParams.push(type);
+        }
+
+        const selectQuery = `
+        SELECT 
+            id, type, content, original_email, metadata, status, 
+            timestamp, user_id, priority, created_at, updated_at
+        FROM ai_queue
+        WHERE ${whereConditions.join(' AND ')}
+        ORDER BY timestamp DESC
+        LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
+    `;
+
+        queryParams.push(parseInt(limit), parseInt(offset));
+
+        const result = await query(selectQuery, queryParams);
+
+        // 2. Return the queue items
+        res.json({
+            success: true,
+            queue: result.rows,
+            total: result.rows.length
+        });
+    } catch (error) {
+        console.error('Error fetching AI queue:', error);
+        res.status(500).json({ error: 'Failed to fetch queue items' });
+    }
 });
 
 app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
@@ -1171,6 +1218,21 @@ app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
             timestamp: new Date().toISOString(),
             userId: req.session.username
         };
+
+        const insertQuery = `
+        INSERT INTO ai_queue (type, content, original_email, metadata, timestamp, user_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *
+    `;
+
+        const result = await query(insertQuery, [
+            type,
+            content,
+            originalEmail || null,
+            JSON.stringify(metadata || {}),
+            new Date().toISOString(),
+            req.session.username
+        ]);
 
         // TODO:
         // 2. Send the email via email service
