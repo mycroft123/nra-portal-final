@@ -6518,12 +6518,27 @@
             }
 
             if (window.editingQueueItem) {
-                const itemIndex = aiQueue.findIndex(item => item.id == window.editingQueueItem);
-                if (itemIndex !== -1) {
-                    aiQueue[itemIndex].aiResponse = currentContent;
-                    aiQueue[itemIndex].content = currentContent;
+                // When editing an existing queue item, send it directly instead of updating the queue
+                const item = aiQueue.find(item => item.id == window.editingQueueItem);
+                if (item) {
+                    // Update the item with the current content
+                    item.aiResponse = currentContent;
+                    item.content = currentContent;
+
+                    // Send the email (same logic as sendAIReply)
+                    alert(`Email "${item.subject || 'AI Generated Email'}" sent successfully!`);
+
+                    // Remove from queue
+                    aiQueue = aiQueue.filter(queueItem => queueItem.id != window.editingQueueItem);
+                    selectedQueueItems.delete(window.editingQueueItem);
+                    updateAIQueueCount();
+                    renderAIQueue();
                 }
                 delete window.editingQueueItem;
+
+                // Close modal after sending
+                closeComposeModal();
+                return;
             } else {
                 // Determine if this is a reply or compose based on modal title and context
                 const modalTitle = document.getElementById('composeModalTitle').textContent;
