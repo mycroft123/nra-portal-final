@@ -1707,8 +1707,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         /* Additional constraints for Froala editor within draft section */
@@ -3216,6 +3221,12 @@
                     <div class="compose-draft-header">
                         <span>AI Generated Draft</span>
                         <div class="editor-mode-toggle">
+                            <label class="toggle-switch" style="display: none;" id="aiInlinModeSwitch">
+                                <input type="checkbox" id="aiInlineModeToggle" onchange="toggleInlineAIMode(this)">
+                                <!-- <input type="checkbox" id="aiModeToggle"> -->
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label">Reply Inline</span>
+                            </label>
                             <label class="toggle-switch">
                                 <input type="checkbox" id="aiModeToggle" onchange="toggleAIMode(this)">
                                 <!-- <input type="checkbox" id="aiModeToggle"> -->
@@ -5036,6 +5047,9 @@
                 document.querySelector('.generate-btn').style.display = 'none';
                 document.getElementById('regenerateBtn').style.display = 'none';
 
+                // Show Inline reply
+                document.getElementById('aiInlinModeSwitch').style.display = 'inline-flex';
+
                 restructureComposeModal();
 
                 // Automatically generate the reply
@@ -5147,6 +5161,13 @@
             document.querySelector('.compose-tone-section').style.display = 'block';
             document.querySelector('.generate-btn').style.display = 'inline-flex';
 
+            // Hide the Inline Reply mode
+            document.getElementById('aiInlinModeSwitch').style.display = 'none';
+
+            // Toggle off the AI Edit and Reply Inline
+            document.getElementById('aiModeToggle').checked = false;
+            document.getElementById('aiInlineModeToggle').checked = false;
+
             // Clean up editing state
             if (window.editingQueueItem) {
                 delete window.editingQueueItem;
@@ -5233,10 +5254,10 @@
                             emailDraftData.draft.body = textContent;
                         }
                     },
-                    'initialized': function () {
-                        console.log('Froala Editor ready with enhanced toolbar!');
-                        enableAIEditingFeatures();
-                    }
+                    // 'initialized': function () {
+                    //     console.log('Froala Editor ready with enhanced toolbar!');
+                    //     enableAIEditingFeatures();
+                    // }
                 }
             });
         }
@@ -5257,7 +5278,7 @@
             // Show draft section with loading indicator
             const draftSection = document.getElementById('draftSection');
             draftSection.style.display = 'block';
-            
+
             // Create and show loading overlay in draft content area
             const draftContent = document.getElementById('draftContent');
             const loadingOverlay = document.createElement('div');
@@ -5273,9 +5294,9 @@
 
             // Auto-scroll to show the loading state
             setTimeout(() => {
-                draftSection.scrollIntoView({ 
-                    behavior: 'smooth', 
-                    block: 'start' 
+                draftSection.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
                 });
             }, 100);
 
@@ -5346,9 +5367,9 @@
                     setTimeout(() => {
                         const draftSection = document.getElementById('draftSection');
                         if (draftSection) {
-                            draftSection.scrollIntoView({ 
-                                behavior: 'smooth', 
-                                block: 'start' 
+                            draftSection.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start'
                             });
                         }
                     }, 200); // Small delay to ensure the content is fully rendered
@@ -5364,7 +5385,7 @@
                 if (loadingOverlay) {
                     loadingOverlay.remove();
                 }
-                
+
                 generateBtn.innerHTML = '<i class="fas fa-magic"></i> Generate Draft';
                 generateBtn.disabled = false;
             }
@@ -5410,9 +5431,9 @@
                     setTimeout(() => {
                         const draftSection = document.getElementById('draftSection');
                         if (draftSection) {
-                            draftSection.scrollIntoView({ 
-                                behavior: 'smooth', 
-                                block: 'start' 
+                            draftSection.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start'
                             });
                         }
                     }, 200); // Small delay to ensure the content is fully rendered
@@ -5608,12 +5629,39 @@
         // Toggle AI Mode function
         let htmlData = null;
         function toggleAIMode(checkbox) {
+            const aiInlineModeToggle = document.getElementById('aiInlineModeToggle')
+
             aiModeEnabled = checkbox.checked;
             if (aiModeEnabled) {
+                if (aiInlineModeToggle.checked) {
+                    aiInlineModeToggle.checked = false
+                    toggleInlineAIMode(aiInlineModeToggle)
+                }
+
                 const viewer = document.querySelector("#draftContent > div.fr-wrapper > div")
                 emailDraftData.draft = viewer.innerText
                 htmlData = convertEmailToHTML(emailDraftData.draft)
                 document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = htmlData
+            } else {
+                const htmlElement = document.getElementById('emailEditor');
+
+                const normalText = convertHTMLToEmail(htmlElement)
+                emailDraftData.draft = normalText
+                document.querySelector("#draftContent > div.fr-wrapper > div").innerText = normalText
+            }
+        }
+
+        function toggleInlineAIMode(checkbox) {
+            const aiModeToggle = document.getElementById('aiModeToggle')
+
+            aiModeEnabled = checkbox.checked;
+            if (aiModeEnabled) {
+                if (aiModeToggle.checked) {
+                    aiModeToggle.checked = false
+                    toggleInlineAIMode(aiModeToggle)
+                }
+
+                showInlineReply1()
             } else {
                 const htmlElement = document.getElementById('emailEditor');
 
@@ -5859,16 +5907,84 @@
         };
 
         // Alternative sentences for inline replies
+        // const inlineAlternatives = {
+        //     intro: ["Thanks for the comprehensive update, Tom.", "Thanks for the clear action items, Tom.", "I appreciate the detailed follow-up, Tom."],
+        //     r1: ["✓ On track - designs will be ready Thursday EOD", "✓ Already 70% complete - delivering Thursday", "✓ Working on this now - Thursday delivery confirmed"],
+        //     r2: ["✓ In progress - fix deploying tomorrow", "✓ Bug identified and fixed - deploying soon", "✓ Alex and I resolved this - going live tomorrow"],
+        //     r3: ["⚠️ Need dashboard access - will deliver Monday once granted", "⚠️ Awaiting permissions - ready to start analysis", "⚠️ Can complete by Monday with dashboard access"],
+        //     r4: ["✓ Completed - feedback provided in Figma", "✓ Done - left detailed comments yesterday", "✓ Reviewed and approved with minor notes"],
+        //     r5: ["→ Will send invites today - any priority order?", "→ Scheduling this afternoon - please advise on sequence", "→ Ready to book meetings - need your input on order"],
+        //     closing: ["All items are progressing well. I'll keep you updated on any changes.", "Everything is on track. Let me know if priorities shift.", "Good progress across all items. Will update you on any blockers."],
+        //     sig: ["Best,<br>Sarah", "Thanks,<br>Sarah", "Regards,<br>Sarah"]
+        // };
+
         const inlineAlternatives = {
-            intro: ["Thanks for the comprehensive update, Tom.", "Thanks for the clear action items, Tom.", "I appreciate the detailed follow-up, Tom."],
-            r1: ["✓ On track - designs will be ready Thursday EOD", "✓ Already 70% complete - delivering Thursday", "✓ Working on this now - Thursday delivery confirmed"],
-            r2: ["✓ In progress - fix deploying tomorrow", "✓ Bug identified and fixed - deploying soon", "✓ Alex and I resolved this - going live tomorrow"],
-            r3: ["⚠️ Need dashboard access - will deliver Monday once granted", "⚠️ Awaiting permissions - ready to start analysis", "⚠️ Can complete by Monday with dashboard access"],
-            r4: ["✓ Completed - feedback provided in Figma", "✓ Done - left detailed comments yesterday", "✓ Reviewed and approved with minor notes"],
-            r5: ["→ Will send invites today - any priority order?", "→ Scheduling this afternoon - please advise on sequence", "→ Ready to book meetings - need your input on order"],
-            closing: ["All items are progressing well. I'll keep you updated on any changes.", "Everything is on track. Let me know if priorities shift.", "Good progress across all items. Will update you on any blockers."],
-            sig: ["Best,<br>Sarah", "Thanks,<br>Sarah", "Regards,<br>Sarah"]
-        };
+            intro: [
+                "Mark, I appreciate you taking the time to share your concerns so clearly. Please find brief, direct answers to your questions below.",
+                "Thank you, Mark, for raising these important issues. I've outlined straightforward responses to help address each point you brought up.",
+                "Mark, thank you for your honest feedback and thoughtful questions. Below are clear, concise responses to each of your concerns."
+            ],
+            q1: [
+                "Wayne LaPierre and others were named in court filings over misuse of NRA funds.",
+                "Former leadership, including LaPierre, was found to have misused contributions for personal benefit.",
+                "Wayne LaPierre and several executives were named in financial investigations."
+            ],
+            q2: [
+                "Reports cite multiple executives and several outside contractors.",
+                "At least a handful of individuals were implicated during audits and investigations.",
+                "Several, including key executives and vendors with questionable contracts."
+            ],
+            q3: [
+                "Luxury travel, private flights, and clothing were charged to NRA accounts.",
+                "Member dues were reportedly spent on unauthorized perks and inflated contracts.",
+                "Misuse of funds on private jets, luxury suits, travel, and vendor kickbacks."
+            ],
+            q4: [
+                "Past leadership chose not to disclose internal issues transparently.",
+                "The NRA failed to get ahead of the story, allowing external media to control the narrative.",
+                "Because past leadership failed to provide internal transparency or updates."
+            ],
+            q5: [
+                "They didn’t stay long—internal issues and external pressure led to rapid turnover.",
+                "Leadership changes continued as the organization worked to stabilize direction.",
+                "They resigned or were replaced during continued legal and internal changes."
+            ],
+            q6: [
+                "He cited differences with the board and concerns about reform efforts.",
+                "Barr resigned amid ongoing organizational struggles and internal disagreements.",
+                "He stepped down citing governance concerns and lack of alignment with leadership."
+            ],
+            q7: [
+                "He was removed after calling for an internal audit; no return has been discussed.",
+                "Tensions with prior leadership led to his exit; new leadership hasn't reinstated him.",
+                "He was ousted after challenging financial mismanagement; no return has been proposed."
+            ],
+            q8: [
+                "A lack of candidate profiles makes it hard—an online introduction portal would help.",
+                "Better member engagement tools are needed to inform votes and boost trust.",
+                "Fully agree—a public online forum for candidates is needed and worth proposing."
+            ],
+            q9: [
+                "That gap in official communication is being addressed going forward.",
+                "The organization is working to ensure future changes are communicated directly to members.",
+                "A key failure of communication we are working to correct through member channels."
+            ],
+            q10: [
+                "He brought a unique voice—his presence is deeply missed by many.",
+                "We're exploring writers who can bring that same authority and enthusiasm.",
+                "Wiley’s voice was unique—we’re working to fill that space with meaningful content."
+            ],
+            closing: [
+                "Thank you again for raising these concerns. Member input helps shape a better NRA.",
+                "We appreciate your commitment to the organization—transparency will remain a top priority.",
+                "Your voice matters, and feedback like this is helping guide positive change."
+            ],
+            sig: [
+                "Respectfully,<br>Mjowett",
+                "Sincerely,<br>Mjowett",
+                "Thank you,<br>Mjowett"
+            ]
+        }
 
         function showReply() {
             const emailContent = document.getElementById('emailContent');
@@ -6007,6 +6123,148 @@
             setTimeout(() => {
                 replySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
+        }
+
+        function showInlineReply1() {
+            document.querySelector('.fr-element.fr-view').innerHTML = `
+            <div class="email-editor inline-reply-mode" id="emailEditor" contenteditable="true">
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="inline-response ai-sentence" data-id="intro" onclick="convertToSmartBox(this)">
+            Mark, thank you for your honest feedback and thoughtful questions. Below are clear, concise responses to each of your concerns.
+        </span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="original-text">Who misused NRA members’ contributions?</span><br>
+        <span class="inline-response ai-sentence" data-id="q1" onclick="convertToSmartBox(this)">Wayne LaPierre and several executives were named in financial investigations.</span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="original-text">How many people were involved?</span><br>
+        <span class="inline-response ai-sentence" data-id="q2" onclick="convertToSmartBox(this)">Several, including key executives and vendors with questionable contracts.</span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="original-text">What were the specific instances of malfeasance?</span><br>
+        <span class="inline-response ai-sentence" data-id="q3" onclick="convertToSmartBox(this)">Misuse of funds on private jets, luxury suits, travel, and vendor kickbacks.</span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="original-text">Why do members have to hear about NRA improprieties from media outlets?</span><br>
+        <span class="inline-response ai-sentence" data-id="q4" onclick="convertToSmartBox(this)">Because past leadership failed to provide internal transparency or updates.</span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="original-text">What happened to the first group of NRA leadership administrators who came after Wayne LaPierre?</span><br>
+        <span class="inline-response ai-sentence" data-id="q5" onclick="convertToSmartBox(this)">They resigned or were replaced during continued legal and internal changes.</span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="original-text">Why did Bob Barr leave?</span><br>
+        <span class="inline-response ai-sentence" data-id="q6" onclick="convertToSmartBox(this)">He stepped down citing governance concerns and lack of alignment with leadership.</span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="original-text">Why isn’t Lieutenant Colonel Oliver North associated with NRA leadership anymore?</span><br>
+        <span class="inline-response ai-sentence" data-id="q7" onclick="convertToSmartBox(this)">He was ousted after challenging financial mismanagement; no return has been proposed.</span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="original-text">Why don't we get to know leadership candidates before voting?</span><br>
+        <span class="inline-response ai-sentence" data-id="q8" onclick="convertToSmartBox(this)">Fully agree—a public online forum for candidates is needed and worth proposing.</span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="original-text">Why do we find out about major NRA changes from the media or Wikipedia instead of the NRA itself?</span><br>
+        <span class="inline-response ai-sentence" data-id="q9" onclick="convertToSmartBox(this)">A key failure of communication we are working to correct through member channels.</span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="original-text">Wiley Clapp’s “Fightin’ Iron” column is missed. What now?</span><br>
+        <span class="inline-response ai-sentence" data-id="q10" onclick="convertToSmartBox(this)">Wiley’s voice was unique—we’re working to fill that space with meaningful content.</span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="inline-response ai-sentence" data-id="closing" onclick="convertToSmartBox(this)">
+            Thank you again for speaking up. Member feedback like yours helps drive necessary change.
+        </span>
+    </div>
+ 
+    <div class="add-line-container">
+        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
+    </div>
+ 
+    <div class="paragraph" contenteditable="true">
+        <span class="inline-response ai-sentence" data-id="sig" onclick="convertToSmartBox(this)">
+            Respectfully,<br>
+            Mjowett
+        </span>
+    </div>
+ 
+</div>
+ 
+            `;
+
+            document.getElementById('replySection').classList.add('active', 'inline-reply-mode');
+            document.querySelector('.reply-options').style.display = 'none';
+
+            // Add event listeners for inline reply mode
+            const editor = document.getElementById('emailEditor');
+            editor.addEventListener('input', handleEditorInput);
+            editor.addEventListener('keydown', handleKeyDown);
+
+            // Re-attach tone selector handlers
+            document.querySelectorAll('.tone-chip').forEach(chip => {
+                chip.addEventListener('click', function () {
+                    document.querySelectorAll('.tone-chip').forEach(c => c.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
         }
 
         function convertEmailToHTML(emailText) {
@@ -6368,7 +6626,7 @@
         };
         let selectedQueueItems = new Set();
 
-        function addToAIQueue(item) {
+        async function addToAIQueue(item) {
             if (!item.id) {
                 item.id = Date.now() + Math.random();
             }
@@ -6384,7 +6642,18 @@
                 renderAIQueue();
             }
 
-            console.log('Added to AI Queue:', item);
+            const response = await fetch(API_BASE_URL + '/ai/queue/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(item),
+                credentials: 'include'
+            });
+
+            const result = await response.json();
+
+            console.log('Added to AI Queue:', item, 'Here is the result:', result);
         }
 
         function updateAIQueueCount() {
@@ -6797,33 +7066,38 @@
             closeComposeModal();
         };
 
-        // document.addEventListener('DOMContentLoaded', function () {
-        //     updateAIQueueCount();
+        document.addEventListener('DOMContentLoaded', async function () {
+            updateAIQueueCount();
 
-        //     setTimeout(() => {
-        //         addToAIQueue({
-        //             type: 'compose',
-        //             subject: 'Welcome New Members',
-        //             aiResponse: 'Dear Fellow Patriots,\n\nWe are excited to welcome our newest members to the NRA family. Your commitment to defending our Second Amendment rights strengthens our cause...',
-        //             originalPrompt: 'Welcome message for new members',
-        //             tone: 'professional',
-        //             status: 'ready',
-        //             timestamp: new Date(Date.now() - 3600000).toISOString() // 1 hour ago
-        //         });
+            const aiQueueRespose = await fetch(API_BASE_URL + '/ai/queue');
+            const aiQueueResult = await aiQueueRespose.json();
+            setTimeout(() => {
+                aiQueue.push(aiQueueResult);
+            }, 1000);
+            // setTimeout(() => {
+            //     addToAIQueue({
+            //         type: 'compose',
+            //         subject: 'Welcome New Members',
+            //         aiResponse: 'Dear Fellow Patriots,\n\nWe are excited to welcome our newest members to the NRA family. Your commitment to defending our Second Amendment rights strengthens our cause...',
+            //         originalPrompt: 'Welcome message for new members',
+            //         tone: 'professional',
+            //         status: 'ready',
+            //         timestamp: new Date(Date.now() - 3600000).toISOString() // 1 hour ago
+            //     });
 
-        //         addToAIQueue({
-        //             type: 'reply',
-        //             subject: 'Re: Concerns about recent legislation',
-        //             originalEmail: {
-        //                 from: 'member@example.com',
-        //                 subject: 'Concerns about recent legislation'
-        //             },
-        //             aiResponse: 'Thank you for reaching out about your concerns regarding the recent legislation. We share your worries and are actively working...',
-        //             status: 'needs-review',
-        //             timestamp: new Date(Date.now() - 1800000).toISOString()
-        //         });
-        //     }, 1000);
-        // });
+            //     addToAIQueue({
+            //         type: 'reply',
+            //         subject: 'Re: Concerns about recent legislation',
+            //         originalEmail: {
+            //             from: 'member@example.com',
+            //             subject: 'Concerns about recent legislation'
+            //         },
+            //         aiResponse: 'Thank you for reaching out about your concerns regarding the recent legislation. We share your worries and are actively working...',
+            //         status: 'needs-review',
+            //         timestamp: new Date(Date.now() - 1800000).toISOString()
+            //     });
+            // }, 1000);
+        });
     </script>
 </body>
 
