@@ -1919,7 +1919,7 @@
 
         /* Email Editor */
         .email-editor {
-            padding: 24px;
+            /* padding: 24px; */
             min-height: 300px;
             outline: none;
             line-height: 1.8;
@@ -2514,7 +2514,7 @@
         }
 
         .email-editor {
-            padding: 24px;
+            /* padding: 24px; */
             min-height: 300px;
             outline: none;
             line-height: 1.8;
@@ -3182,8 +3182,8 @@
                         <span>AI Generated Draft</span>
                         <div class="editor-mode-toggle">
                             <label class="toggle-switch">
-                                <!-- <input type="checkbox" id="aiModeToggle" onchange="toggleAIMode(this)"> -->
-                                <input type="checkbox" id="aiModeToggle">
+                                <input type="checkbox" id="aiModeToggle" onchange="toggleAIMode(this)">
+                                <!-- <input type="checkbox" id="aiModeToggle"> -->
                                 <span class="toggle-slider"></span>
                                 <span class="toggle-label">AI Edit Mode</span>
                             </label>
@@ -5512,22 +5512,20 @@
 
 
         // Toggle AI Mode function
+        let htmlData = null;
         function toggleAIMode(checkbox) {
             aiModeEnabled = checkbox.checked;
-
             if (aiModeEnabled) {
-                if (window.editorInstance && window.editorInstance.initialized) {
-                    enableAIEditingFeatures();
-                } else if (window.editorInstance) {
-                    window.editorInstance.events.on('initialized', function () {
-                        enableAIEditingFeatures();
-                    });
-                } else {
-                    console.warn('Editor not ready yet');
-                }
+                const viewer = document.querySelector("#draftContent > div.fr-wrapper > div")
+                emailDraftData.draft = viewer.innerText
+                htmlData = convertEmailToHTML(emailDraftData.draft)
+                document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = htmlData
             } else {
-                disableAIEditingFeatures();
-                hideAIEditPopup();
+                const htmlElement = document.getElementById('emailEditor');
+
+                const normalText = convertHTMLToEmail(htmlElement)
+                emailDraftData.draft = normalText
+                document.querySelector("#draftContent > div.fr-wrapper > div").innerText = normalText
             }
         }
 
@@ -5917,6 +5915,86 @@
             }, 100);
         }
 
+        function convertEmailToHTML(emailText) {
+            let dataId = 1;
+            let htmlOutput = '<div class="email-editor editable-mode" id="emailEditor" contenteditable="true">\n';
+
+            // Split text into top-level paragraphs by \n\n
+            const paragraphs = emailText.trim().split(/\n{2,}/);
+
+            paragraphs.forEach(paragraph => {
+                // Check if this is a list-type paragraph (contains numbered lines like 1., 2., 3.)
+                const lines = paragraph.split('\n').map(line => line.trim()).filter(line => line);
+
+                // If multiple lines and lines start with 1. 2. 3. etc., treat each as its own paragraph
+                const isNumberedList = lines.length > 1 && lines.every(line => /^\d+\./.test(line));
+
+                if (isNumberedList) {
+                    lines.forEach(line => {
+                        htmlOutput += '    <div class="paragraph">\n';
+                        const parts = line.match(/(\d+\.)|[^.!?]+[.!?]+|[^.!?]+$/g) || [line];
+                        parts.forEach(part => {
+                            const trimmed = part.trim();
+                            if (trimmed.length > 0) {
+                                htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmed}</span>\n`;
+                            }
+                        });
+                        htmlOutput += '    </div>\n';
+                        htmlOutput += '    <div class="add-line-container">\n';
+                        htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                        htmlOutput += '    </div>\n';
+                    });
+                } else {
+                    // Normal paragraph: split into sentences
+                    const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [paragraph];
+                    htmlOutput += '    <div class="paragraph">\n';
+                    sentences.forEach(sentence => {
+                        const trimmed = sentence.trim();
+                        if (trimmed.length > 0) {
+                            htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmed}</span>\n`;
+                        }
+                    });
+                    htmlOutput += '    </div>\n';
+                    htmlOutput += '    <div class="add-line-container">\n';
+                    htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                    htmlOutput += '    </div>\n';
+                }
+            });
+
+            htmlOutput += '</div>';
+            return htmlOutput;
+        }
+
+        function convertHTMLToEmail(htmlElement) {
+            let emailText = '';
+            const paragraphs = [...htmlElement.querySelectorAll('.paragraph')];
+
+            for (let i = 0; i < paragraphs.length; i++) {
+                const paragraph = paragraphs[i];
+                const spans = [...paragraph.querySelectorAll('.ai-sentence')];
+                let paragraphText = spans.map(span => span.textContent.trim()).join(' ');
+
+                // Append paragraph text
+                emailText += paragraphText;
+
+                // Check if this and next paragraph are numbered list items (start with 1., 2., 3., etc.)
+                const isCurrentListItem = /^\d+\./.test(paragraphText);
+                const nextParagraph = paragraphs[i + 1];
+                const isNextListItem = nextParagraph && /^\d+\./.test(nextParagraph.textContent.trim());
+
+                if (isCurrentListItem && isNextListItem) {
+                    // Between consecutive numbered list items -> add single newline
+                    emailText += '\n';
+                } else {
+                    // Else add two newlines to separate paragraphs
+                    emailText += '\n\n';
+                }
+            }
+
+            // Trim extra trailing whitespace/newlines
+            return emailText.trim();
+        }
+
         function sendReply() {
             alert('Reply Sent Successfully!!');
             console.log('Reply Sent Successfully!!');
@@ -6087,23 +6165,60 @@
             });
         }
 
+        let nextDataId = 1000;
+
+        function placeCaretAtEnd(el) {
+            el.focus();
+            if (typeof window.getSelection != "undefined" && typeof document.createRange != "undefined") {
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                range.collapse(false);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            } else if (typeof document.body.createTextRange != "undefined") {
+                const textRange = document.body.createTextRange();
+                textRange.moveToElementText(el);
+                textRange.collapse(false);
+                textRange.select();
+            }
+        }
+
         function addNewLine(button) {
             const container = button.closest('.add-line-container');
+            const parent = container.parentNode;
 
             const newParagraph = document.createElement('div');
             newParagraph.className = 'paragraph';
-            newParagraph.contentEditable = 'true';
-            newParagraph.innerHTML = '';
+
+            const newSpan = document.createElement('span');
+            newSpan.className = 'ai-sentence';
+            newSpan.setAttribute('data-id', nextDataId++);
+            newSpan.setAttribute('contenteditable', 'true');
+            newSpan.setAttribute('onclick', 'convertToSmartBox(this)');
+
+            // Insert zero-width space initially so caret stays inside span
+            newSpan.textContent = '\u200B';
+
+            newParagraph.appendChild(newSpan);
 
             const newAddLineContainer = document.createElement('div');
             newAddLineContainer.className = 'add-line-container';
             newAddLineContainer.innerHTML = '<button class="add-line-btn" onclick="addNewLine(this)">+</button>';
 
-            container.parentNode.insertBefore(newParagraph, container.nextSibling);
-            container.parentNode.insertBefore(newAddLineContainer, newParagraph.nextSibling);
+            parent.insertBefore(newParagraph, container.nextSibling);
+            parent.insertBefore(newAddLineContainer, newParagraph.nextSibling);
 
-            newParagraph.focus();
+            placeCaretAtEnd(newSpan);
         }
+
+        document.addEventListener('input', e => {
+            if (e.target.classList && e.target.classList.contains('ai-sentence')) {
+                // Remove zero-width spaces if user actually types content
+                e.target.textContent = e.target.textContent.replace(/\u200B/g, '');
+            }
+        });
+
 
         function handleEditorInput(e) {
             if (window.processTimeout) {
