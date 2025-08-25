@@ -5111,6 +5111,11 @@
             document.getElementById('composeInputView').style.display = 'block';
             document.querySelector('.compose-tone-section').style.display = 'block';
             document.querySelector('.generate-btn').style.display = 'inline-flex';
+
+            // Clean up editing state
+            if (window.editingQueueItem) {
+                delete window.editingQueueItem;
+            }
         }
 
         function openMaximizeMode() {
@@ -6199,6 +6204,8 @@
             container.innerHTML = '';
 
             filteredQueue.forEach(item => {
+                console.log(item, 'AIIIIIIIIIIIIIIIIIIIIIII');
+
                 const itemElement = document.createElement('div');
                 itemElement.className = 'ai-queue-item';
                 itemElement.innerHTML = `
@@ -6303,21 +6310,100 @@
         function editAIReply(itemId) {
             const item = aiQueue.find(i => i.id == itemId);
             if (item) {
-                openComposeModal();
+                console.log(item, 'ALIS KYA HAI SUNAAAA');
 
-                if (item.type === 'compose') {
-                    document.getElementById('composePrompt').value = item.originalPrompt || 'Edit this AI-generated email';
-                    document.getElementById('toneSelector').value = item.tone || 'professional';
+                // Determine the correct modal type based on the queue item type
+                const modalType = item.type === 'compose' ? 'COMPOSE_WITH_AI' : 'REPLY_WITH_AI';
+                const isEditingReply = item.type === 'reply';
+
+                if (isEditingReply) {
+                    // For replies, we need to display the email content FIRST so it can be cloned into the modal
+                    selectedEmail = item.originalEmail;
+                    displayEmailDetail(item.originalEmail);
+
+                    // Wait for email content to be displayed, then open modal
+                    setTimeout(() => {
+                        // Temporarily override the openComposeModal behavior for editing
+                        const originalGenerateAIReply = window.generateAIReply;
+                        window.generateAIReply = function () {
+                            // Restore the original function
+                            window.generateAIReply = originalGenerateAIReply;
+                            // Don't generate, we're editing existing content
+                            return Promise.resolve();
+                        };
+
+                        // Open the modal with the appropriate type to ensure consistent UI
+                        openComposeModal(modalType);
+
+                        // Continue with the rest of the setup
+                        setupModalContent();
+                    }, 100);
                 } else {
-                    document.getElementById('composePrompt').value = `Edit reply to: ${item.originalEmail?.subject || 'Email'}`;
+                    // For compose, open modal immediately
+                    openComposeModal(modalType);
+                    setupModalContent();
                 }
 
-                document.getElementById('draftContent').value = item.aiResponse || item.content || '';
-                document.getElementById('draftSection').style.display = 'block';
-                document.getElementById('regenerateBtn').style.display = 'inline-flex';
-                document.getElementById('sendEmailBtn').disabled = false;
+                function setupModalContent() {
+                    // Set up the modal content based on item type
+                    if (item.type === 'compose') {
+                        document.getElementById('composePrompt').value = item.originalPrompt || 'Edit this AI-generated email';
+                        document.getElementById('toneSelector').value = item.tone || 'professional';
+                    } else {
+                        // For replies, set up the context similar to Reply with AI
+                        document.getElementById('toneSelector').value = item.tone || 'professional';
 
-                window.editingQueueItem = itemId;
+                        // For reply editing, we want to show the input section so users can see/modify the context
+                        // This makes the Edit button behavior consistent with the AI buttons
+                        setTimeout(() => {
+                            const composeInputSection = document.getElementById('composeInputView');
+                            if (composeInputSection) {
+                                composeInputSection.style.display = 'block';
+                                document.getElementById('composePrompt').value = `Edit reply to: ${item.originalEmail?.subject || 'Email'}`;
+                            }
+                        }, 50);
+                    }
+
+                    // Wait a moment for the modal to fully initialize, then set up the content
+                    setTimeout(() => {
+                        // Show the draft content and enable editing
+                        const draftContent = item.aiResponse || item.content || '';
+
+                        // Initialize editor if not already done
+                        if (!window.editorInstance) {
+                            initializeEditor();
+                        }
+
+                        // Set the draft content in the appropriate editor
+                        if (window.editorInstance) {
+                            window.editorInstance.html.set(draftContent);
+                        } else {
+                            // Fallback: set content directly
+                            const draftContentElement = document.getElementById('draftContent');
+                            if (draftContentElement) {
+                                if (draftContentElement.tagName === 'TEXTAREA') {
+                                    draftContentElement.value = draftContent;
+                                } else {
+                                    draftContentElement.innerHTML = draftContent;
+                                }
+                            }
+                        }
+
+                        // Show the draft section and enable controls
+                        document.getElementById('draftSection').style.display = 'block';
+                        document.getElementById('regenerateBtn').style.display = 'inline-flex';
+                        document.getElementById('sendEmailBtn').disabled = false;
+
+                        // Hide the generate button since we already have content
+                        const generateBtn = document.querySelector('.generate-btn');
+                        if (generateBtn) {
+                            generateBtn.style.display = 'none';
+                        }
+
+                        // Mark this as an editing session
+                        window.editingQueueItem = itemId;
+                    }, isEditingReply ? 50 : 100); // Shorter delay for replies since modal is already set up
+                }
             }
         }
 
@@ -6439,48 +6525,59 @@
                 }
                 delete window.editingQueueItem;
             } else {
-                addToAIQueue({
-                    type: 'compose',
-                    subject: 'AI Generated Email',
+                // Determine if this is a reply or compose based on modal title and context
+                const modalTitle = document.getElementById('composeModalTitle').textContent;
+                const isReply = modalTitle.includes('Reply with AI');
+
+                const queueItem = {
+                    type: isReply ? 'reply' : 'compose',
+                    subject: isReply ? `Re: ${selectedEmail?.subject || 'Email'}` : 'AI Generated Email',
                     aiResponse: currentContent,
                     content: currentContent,
                     originalPrompt: prompt,
                     tone: tone,
                     status: 'ready'
-                });
+                };
+
+                // If it's a reply, include the original email context
+                if (isReply && selectedEmail) {
+                    queueItem.originalEmail = selectedEmail;
+                }
+
+                addToAIQueue(queueItem);
             }
 
             alert('Email added to AI Queue for review!');
             closeComposeModal();
         };
 
-        document.addEventListener('DOMContentLoaded', function () {
-            updateAIQueueCount();
+        // document.addEventListener('DOMContentLoaded', function () {
+        //     updateAIQueueCount();
 
-            setTimeout(() => {
-                addToAIQueue({
-                    type: 'compose',
-                    subject: 'Welcome New Members',
-                    aiResponse: 'Dear Fellow Patriots,\n\nWe are excited to welcome our newest members to the NRA family. Your commitment to defending our Second Amendment rights strengthens our cause...',
-                    originalPrompt: 'Welcome message for new members',
-                    tone: 'professional',
-                    status: 'ready',
-                    timestamp: new Date(Date.now() - 3600000).toISOString() // 1 hour ago
-                });
+        //     setTimeout(() => {
+        //         addToAIQueue({
+        //             type: 'compose',
+        //             subject: 'Welcome New Members',
+        //             aiResponse: 'Dear Fellow Patriots,\n\nWe are excited to welcome our newest members to the NRA family. Your commitment to defending our Second Amendment rights strengthens our cause...',
+        //             originalPrompt: 'Welcome message for new members',
+        //             tone: 'professional',
+        //             status: 'ready',
+        //             timestamp: new Date(Date.now() - 3600000).toISOString() // 1 hour ago
+        //         });
 
-                addToAIQueue({
-                    type: 'reply',
-                    subject: 'Re: Concerns about recent legislation',
-                    originalEmail: {
-                        from: 'member@example.com',
-                        subject: 'Concerns about recent legislation'
-                    },
-                    aiResponse: 'Thank you for reaching out about your concerns regarding the recent legislation. We share your worries and are actively working...',
-                    status: 'needs-review',
-                    timestamp: new Date(Date.now() - 1800000).toISOString()
-                });
-            }, 1000);
-        });
+        //         addToAIQueue({
+        //             type: 'reply',
+        //             subject: 'Re: Concerns about recent legislation',
+        //             originalEmail: {
+        //                 from: 'member@example.com',
+        //                 subject: 'Concerns about recent legislation'
+        //             },
+        //             aiResponse: 'Thank you for reaching out about your concerns regarding the recent legislation. We share your worries and are actively working...',
+        //             status: 'needs-review',
+        //             timestamp: new Date(Date.now() - 1800000).toISOString()
+        //         });
+        //     }, 1000);
+        // });
     </script>
 </body>
 
