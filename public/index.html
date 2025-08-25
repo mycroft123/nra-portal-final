@@ -6400,6 +6400,17 @@
                             generateBtn.style.display = 'none';
                         }
 
+                        // Auto-scroll to the AI Generated Draft section for better UX
+                        setTimeout(() => {
+                            const draftSection = document.getElementById('draftSection');
+                            if (draftSection) {
+                                draftSection.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'start'
+                                });
+                            }
+                        }, 100); // Small delay to ensure the section is fully rendered
+
                         // Mark this as an editing session
                         window.editingQueueItem = itemId;
                     }, isEditingReply ? 50 : 100); // Shorter delay for replies since modal is already set up
