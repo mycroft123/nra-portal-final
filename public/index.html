@@ -1834,7 +1834,7 @@
         .fr-popup .fr-command.fr-btn svg,
         .fr-modal .fr-command.fr-btn i,
         .fr-modal .fr-command.fr-btn svg {
-            width: 19px;
+            width: 16px;
         }
 
         .fr-second-toolbar {
@@ -1963,7 +1963,7 @@
             min-height: 300px;
             outline: none;
             line-height: 1.8;
-            font-size: 15px;
+            font-size: 14px;
         }
 
         .email-editor.editable-mode {
@@ -2096,8 +2096,13 @@
         }
 
         @keyframes pulse {
-            from { opacity: 0.6; }
-            to { opacity: 1; }
+            from {
+                opacity: 0.6;
+            }
+
+            to {
+                opacity: 1;
+            }
         }
 
         /* Send section */
@@ -2576,7 +2581,7 @@
             min-height: 300px;
             outline: none;
             line-height: 1.8;
-            font-size: 15px;
+            font-size: 14px;
         }
 
         .email-editor.editable-mode {
@@ -3783,7 +3788,7 @@
         function displayEmailDetail(email) {
             // Set current email data for AI context
             window.currentEmailData = email;
-            
+
             const senderName = extractNameFromEmail(email.sender);
             const formattedDate = email.date ?
                 new Date(email.date).toLocaleDateString('en-US', {
@@ -5445,6 +5450,14 @@
                     const draftContent = emailDraftData.draft.body;
                     window.editorInstance.html.set(draftContent.replace(/\n/g, '<br>'));
 
+                    const htmlContent = draftContent
+                        .split('\n\n')
+                        .filter(para => para.trim())
+                        .map(para => `<p style="margin-bottom: 16px;">${para.replace(/\n/g, '<br>')}</p>`)
+                        .join('');
+
+                    window.editorInstance.html.set(htmlContent);
+
                     document.getElementById('draftSection').style.display = 'block';
                     document.getElementById('regenerateBtn').style.display = 'inline-flex';
                     document.getElementById('sendEmailBtn').disabled = false;
@@ -5662,7 +5675,7 @@
 
                 const viewer = document.querySelector("#draftContent > div.fr-wrapper > div")
                 console.log(viewer, 'viewer-----------------------------------');
-                
+
                 emailDraftData.draft = viewer.innerText
                 htmlData = convertEmailToHTML(emailDraftData.draft)
                 document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = htmlData
@@ -5675,17 +5688,42 @@
             }
         }
 
+        // function toggleInlineAIMode(checkbox) {
+        //     const aiModeToggle = document.getElementById('aiModeToggle')
+
+        //     aiModeEnabled = checkbox.checked;
+        //     if (aiModeEnabled) {
+        //         if (aiModeToggle.checked) {
+        //             aiModeToggle.checked = false
+        //             toggleInlineAIMode(aiModeToggle)
+        //         }
+
+        //         showInlineReply1()
+        //     } else {
+        //         const htmlElement = document.getElementById('emailEditor');
+
+        //         const normalText = convertHTMLToEmail(htmlElement)
+        //         emailDraftData.draft = normalText
+        //         document.querySelector("#draftContent > div.fr-wrapper > div").innerText = normalText
+        //     }
+        // }
+
         function toggleInlineAIMode(checkbox) {
             const aiModeToggle = document.getElementById('aiModeToggle')
 
             aiModeEnabled = checkbox.checked;
+            // if checkbox is enabled
             if (aiModeEnabled) {
                 if (aiModeToggle.checked) {
                     aiModeToggle.checked = false
                     toggleInlineAIMode(aiModeToggle)
                 }
 
-                showInlineReply1()
+                // showInlineReply1()  
+                const viewer = document.querySelector("#draftContent > div.fr-wrapper > div")
+                emailDraftData.draft = viewer.innerText
+                htmlData = convertEmailToHTML1(emailDraftData.draft)
+                document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = htmlData
             } else {
                 const htmlElement = document.getElementById('emailEditor');
 
@@ -5831,28 +5869,36 @@
             window.editorInstance.html.set(htmlContent);
         }
 
+        // function getCurrentEditorContent() {
+        //     if (isAIEditor) {
+        //         const aiEditor = document.getElementById('aiDraftEditor');
+        //         const sentences = aiEditor.querySelectorAll('.ai-sentence');
+        //         let content = '';
+        //         sentences.forEach((sentence, index) => {
+        //             const text = sentence.textContent || sentence.innerText;
+        //             content += text;
+        //             if (index < sentences.length - 1) {
+        //                 content += '\n\n';
+        //             }
+        //         });
+        //         return content;
+        //     } else {
+        //         if (window.editorInstance) {
+        //             const htmlContent = window.editorInstance.html.get();
+        //             return htmlContent.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '');
+        //         }
+        //         return '';
+        //     }
+        // }
+
         function getCurrentEditorContent() {
             if (isAIEditor) {
-                const aiEditor = document.getElementById('aiDraftEditor');
-                const sentences = aiEditor.querySelectorAll('.ai-sentence');
-                let content = '';
-                sentences.forEach((sentence, index) => {
-                    const text = sentence.textContent || sentence.innerText;
-                    content += text;
-                    if (index < sentences.length - 1) {
-                        content += '\n\n';
-                    }
-                });
-                return content;
+                const htmlElement = document.getElementById('emailEditor');
+                return convertHTMLToEmail(htmlElement)
             } else {
-                if (window.editorInstance) {
-                    const htmlContent = window.editorInstance.html.get();
-                    return htmlContent.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '');
-                }
-                return '';
+                return document.querySelector("#draftContent > div.fr-wrapper > div").innerText
             }
         }
-
 
         async function regenerateEmailDraft() {
             const modalTitle = document.getElementById('composeModalTitle').textContent;
@@ -6298,7 +6344,7 @@
             // Split text into top-level paragraphs by \n\n
             const paragraphs = emailText.trim().split(/\n{2,}/);
 
-            paragraphs.forEach(paragraph => {
+            paragraphs.forEach((paragraph, index) => {
                 // Check if this is a list-type paragraph (contains numbered lines like 1., 2., 3.)
                 const lines = paragraph.split('\n').map(line => line.trim()).filter(line => line);
 
@@ -6321,19 +6367,37 @@
                         htmlOutput += '    </div>\n';
                     });
                 } else {
-                    // Normal paragraph: split into sentences
-                    const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [paragraph];
-                    htmlOutput += '    <div class="paragraph">\n';
-                    sentences.forEach(sentence => {
-                        const trimmed = sentence.trim();
-                        if (trimmed.length > 0) {
-                            htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmed}</span>\n`;
-                        }
-                    });
-                    htmlOutput += '    </div>\n';
-                    htmlOutput += '    <div class="add-line-container">\n';
-                    htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
-                    htmlOutput += '    </div>\n';
+                    // For last paragraph: convert internal \n to <br>
+                    if (index === paragraphs.length - 1) {
+                        // Escape HTML special chars just in case, then replace \n with <br>
+                        const escapedText = paragraph
+                            .replace(/&/g, "&amp;")
+                            .replace(/</g, "&lt;")
+                            .replace(/>/g, "&gt;");
+
+                        const withBr = escapedText.replace(/\n/g, '<br>');
+                        htmlOutput += '    <div class="paragraph">\n';
+                        htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${withBr}</span>\n`;
+                        htmlOutput += '    </div>\n';
+                        htmlOutput += '    <div class="add-line-container">\n';
+                        htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                        htmlOutput += '    </div>\n';
+                    } else {
+
+                        // Normal paragraph: split into sentences
+                        const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [paragraph];
+                        htmlOutput += '    <div class="paragraph">\n';
+                        sentences.forEach(sentence => {
+                            const trimmed = sentence.trim();
+                            if (trimmed.length > 0) {
+                                htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmed}</span>\n`;
+                            }
+                        });
+                        htmlOutput += '    </div>\n';
+                        htmlOutput += '    <div class="add-line-container">\n';
+                        htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                        htmlOutput += '    </div>\n';
+                    }
                 }
             });
 
@@ -6341,12 +6405,129 @@
             return htmlOutput;
         }
 
+        function convertEmailToHTML1(emailText) {
+            let dataId = 1;
+            let htmlOutput = '<div class="email-editor editable-mode" id="emailEditor" contenteditable="true">\n';
+
+            // Split text into top-level paragraphs by \n\n
+            const paragraphs = emailText.trim().split(/\n{2,}/);
+
+            paragraphs.forEach((paragraph, index) => {
+                // Check if this is a list-type paragraph (contains numbered lines like 1., 2., 3.)
+                const lines = paragraph.split('\n').map(line => line.trim()).filter(line => line);
+
+                const isNumberedList = lines.length > 1 && lines.every(line => /^\d+\./.test(line));
+
+                if (isNumberedList) {
+                    lines.forEach(line => {
+                        htmlOutput += '    <div class="paragraph">\n';
+                        const parts = line.match(/(\d+\.)|[^.!?]+[.!?]+|[^.!?]+$/g) || [line];
+                        parts.forEach(part => {
+                            const trimmed = part.trim();
+                            if (trimmed.length > 0) {
+                                htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmed}</span>\n`;
+                            }
+                        });
+                        htmlOutput += '    </div>\n';
+                        htmlOutput += '    <div class="add-line-container">\n';
+                        htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                        htmlOutput += '    </div>\n';
+                    });
+                } else {
+                    // For last paragraph: convert internal \n to <br>
+                    if (index === paragraphs.length - 1) {
+                        // Escape HTML special chars just in case, then replace \n with <br>
+                        const escapedText = paragraph
+                            .replace(/&/g, "&amp;")
+                            .replace(/</g, "&lt;")
+                            .replace(/>/g, "&gt;");
+
+                        const withBr = escapedText.replace(/\n/g, '<br>');
+                        htmlOutput += '    <div class="paragraph">\n';
+                        htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${withBr}</span>\n`;
+                        htmlOutput += '    </div>\n';
+                        htmlOutput += '    <div class="add-line-container">\n';
+                        htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                        htmlOutput += '    </div>\n';
+                    } else {
+
+                        // Treat entire paragraph as one sentence/line (even if it has multiple sentences)
+                        const trimmedParagraph = paragraph.trim();
+                        if (trimmedParagraph.length > 0) {
+                            htmlOutput += '    <div class="paragraph">\n';
+                            htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmedParagraph}</span>\n`;
+                            htmlOutput += '    </div>\n';
+                            htmlOutput += '    <div class="add-line-container">\n';
+                            htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                            htmlOutput += '    </div>\n';
+                        }
+                    }
+                }
+            });
+
+            htmlOutput += '</div>';
+            return htmlOutput;
+        }
+
+        // function convertHTMLToEmail(htmlElement) {
+        //     let emailText = '';
+        //     const paragraphs = [...htmlElement.querySelectorAll('.paragraph')];
+
+        //     for (let i = 0; i < paragraphs.length; i++) {
+        //         const paragraph = paragraphs[i];
+        //         const spans = [...paragraph.querySelectorAll('.ai-sentence')];
+        //         let paragraphText = spans.map(span => span.textContent.trim()).join(' ');
+
+        //         // Append paragraph text
+        //         emailText += paragraphText;
+
+        //         // Check if this and next paragraph are numbered list items (start with 1., 2., 3., etc.)
+        //         const isCurrentListItem = /^\d+\./.test(paragraphText);
+        //         const nextParagraph = paragraphs[i + 1];
+        //         const isNextListItem = nextParagraph && /^\d+\./.test(nextParagraph.textContent.trim());
+
+        //         if (isCurrentListItem && isNextListItem) {
+        //             // Between consecutive numbered list items -> add single newline
+        //             emailText += '\n';
+        //         } else {
+        //             // Else add two newlines to separate paragraphs
+        //             emailText += '\n\n';
+        //         }
+        //     }
+
+        //     // Trim extra trailing whitespace/newlines
+        //     return emailText.trim();
+        // }
+
         function convertHTMLToEmail(htmlElement) {
             let emailText = '';
             const paragraphs = [...htmlElement.querySelectorAll('.paragraph')];
-
+            
             for (let i = 0; i < paragraphs.length; i++) {
                 const paragraph = paragraphs[i];
+
+                // Special handling for last paragraph
+                if (i === paragraphs.length - 1) {
+                    // Clone to avoid messing with original DOM
+                    const clone = paragraph.cloneNode(true);
+
+                    // Replace all <br> tags with newline characters
+                    clone.querySelectorAll('br').forEach(br => {
+                        const newlineTextNode = document.createTextNode('\n');
+                        br.replaceWith(newlineTextNode);
+                    });
+
+                    // Get the textContent including the replaced newlines
+                    let paragraphText = clone.textContent;
+
+                    // Trim and append
+                    paragraphText = paragraphText.trim();
+
+                    emailText += paragraphText + '\n'; // keep two newlines after last paragraph for spacing
+                    continue;
+                }
+
+                // For other paragraphs, join spans with space as before
                 const spans = [...paragraph.querySelectorAll('.ai-sentence')];
                 let paragraphText = spans.map(span => span.textContent.trim()).join(' ');
 
@@ -6368,7 +6549,8 @@
             }
 
             // Trim extra trailing whitespace/newlines
-            return emailText.trim();
+            emailText = emailText.trim();
+            return emailText;
         }
 
         function sendReply() {
@@ -6452,7 +6634,7 @@
 
                 if (isReallyLeaving) {
                     hoverTimeout = setTimeout(() => {
-                        if (activeSmartBox === wrapper && !wrapper.contains(document.activeElement)) {
+                        if (activeSmartBox === wrapper && !wrapper.contains(document.activeElement) && wrapper.dataset.loading !== "true") {
                             convertBackToSentence(wrapper, sentenceId);
                         }
                     }, 300);
@@ -6483,29 +6665,29 @@
         function extractContext(button) {
             const smartBox = button.closest('.smart-box-wrapper');
             const currentSentence = smartBox.querySelector('.smart-box-content').textContent.trim();
-            
+
             // Find the current paragraph
             const paragraph = smartBox.closest('.paragraph');
             let currentParagraph = '';
             let previousContext = '';
-            
+
             if (paragraph) {
                 // Get current paragraph text (excluding the smart box content)
                 const paragraphClone = paragraph.cloneNode(true);
                 const smartBoxes = paragraphClone.querySelectorAll('.smart-box-wrapper');
                 smartBoxes.forEach(box => {
-                    const originalText = box.dataset.sentenceId ? 
+                    const originalText = box.dataset.sentenceId ?
                         box.querySelector('.smart-box-content').textContent : '';
                     const textNode = document.createTextNode(originalText);
                     box.parentNode.replaceChild(textNode, box);
                 });
                 currentParagraph = paragraphClone.textContent.trim();
-                
+
                 // Get previous paragraphs for context (up to 2 previous paragraphs)
                 const allParagraphs = Array.from(document.querySelectorAll('.paragraph'));
                 const currentIndex = allParagraphs.indexOf(paragraph);
                 const previousParagraphs = allParagraphs.slice(Math.max(0, currentIndex - 2), currentIndex);
-                
+
                 previousContext = previousParagraphs.map(p => {
                     const clone = p.cloneNode(true);
                     const boxes = clone.querySelectorAll('.smart-box-wrapper');
@@ -6516,14 +6698,14 @@
                     return clone.textContent.trim();
                 }).join(' ');
             }
-            
+
             // Extract email context if available
             const emailContext = {
                 subject: window.currentEmailData?.subject || '',
                 sender: window.currentEmailData?.sender || '',
                 sentiment: window.currentEmailData?.analysis?.sentiment_category || ''
             };
-            
+
             return {
                 currentSentence,
                 currentParagraph,
@@ -6534,17 +6716,23 @@
 
         // Dynamic AI-powered sentence regeneration
         async function regenerateSentence(button, sentenceId) {
+            const wrapper = button.closest('.smart-box-wrapper');
+            wrapper.dataset.loading = "true";
+
             const content = button.closest('.smart-box').querySelector('.smart-box-content');
             const originalText = content.textContent.trim();
-            
+
+            const toneElement = document.getElementById('toneSelector');
+            const tone = toneElement ? toneElement.value : 'professional';
+
             // Add loading state
             const originalContent = content.innerHTML;
             content.innerHTML = '<span class="ai-loading"><i class="fas fa-spinner fa-spin"></i> Generating...</span>';
             button.disabled = true;
-            
+
             try {
                 const context = extractContext(button);
-                
+
                 const response = await fetch('/api/ai/generate-sentence', {
                     method: 'POST',
                     headers: {
@@ -6555,13 +6743,13 @@
                         currentSentence: originalText,
                         previousContext: context.previousContext,
                         currentParagraph: context.currentParagraph,
-                        tone: 'professional',
+                        tone: tone,
                         emailContext: context.emailContext
                     })
                 });
 
                 const result = await response.json();
-                
+
                 if (result.success) {
                     content.innerHTML = result.sentence;
                     content.style.animation = 'highlight 0.5s ease';
@@ -6571,19 +6759,19 @@
                 } else {
                     throw new Error(result.error || 'Failed to generate sentence');
                 }
-                
+
             } catch (error) {
                 console.error('Error regenerating sentence:', error);
                 // Fallback to original content on error
                 content.innerHTML = originalContent;
-                
+
                 // Show error briefly
                 const errorSpan = document.createElement('span');
                 errorSpan.textContent = ' (Error generating)';
                 errorSpan.style.color = '#ff6b6b';
                 errorSpan.style.fontSize = '0.8em';
                 content.appendChild(errorSpan);
-                
+
                 setTimeout(() => {
                     if (errorSpan.parentNode) {
                         errorSpan.remove();
@@ -6591,22 +6779,29 @@
                 }, 3000);
             } finally {
                 button.disabled = false;
+                wrapper.dataset.loading = "false";
             }
         }
 
         // Dynamic AI-powered sentence expansion
         async function expandSentence(button) {
+            const wrapper = button.closest('.smart-box-wrapper');
+            wrapper.dataset.loading = "true";
+
             const content = button.closest('.smart-box').querySelector('.smart-box-content');
             const originalText = content.textContent.trim();
-            
+
+            const toneElement = document.getElementById('toneSelector');
+            const tone = toneElement ? toneElement.value : 'professional';
+
             // Add loading state
             const originalContent = content.innerHTML;
             content.innerHTML = '<span class="ai-loading"> <i class="fas fa-spinner fa-spin"></i> Expanding...</span>';
             button.disabled = true;
-            
+
             try {
                 const context = extractContext(button);
-                
+
                 const response = await fetch('/api/ai/generate-sentence', {
                     method: 'POST',
                     headers: {
@@ -6617,13 +6812,13 @@
                         currentSentence: originalText,
                         previousContext: context.previousContext,
                         currentParagraph: context.currentParagraph,
-                        tone: 'professional',
+                        tone: tone,
                         emailContext: context.emailContext
                     })
                 });
 
                 const result = await response.json();
-                
+
                 if (result.success) {
                     content.innerHTML = result.sentence;
                     content.style.animation = 'highlight 0.5s ease';
@@ -6633,17 +6828,17 @@
                 } else {
                     throw new Error(result.error || 'Failed to expand sentence');
                 }
-                
+
             } catch (error) {
                 console.error('Error expanding sentence:', error);
                 content.innerHTML = originalContent;
-                
+
                 const errorSpan = document.createElement('span');
                 errorSpan.textContent = ' (Error expanding)';
                 errorSpan.style.color = '#ff6b6b';
                 errorSpan.style.fontSize = '0.8em';
                 content.appendChild(errorSpan);
-                
+
                 setTimeout(() => {
                     if (errorSpan.parentNode) {
                         errorSpan.remove();
@@ -6651,22 +6846,29 @@
                 }, 3000);
             } finally {
                 button.disabled = false;
+                wrapper.dataset.loading = "false";
             }
         }
 
         // Dynamic AI-powered sentence shortening
         async function shortenSentence(button) {
+            const wrapper = button.closest('.smart-box-wrapper');
+            wrapper.dataset.loading = "true";
+
             const content = button.closest('.smart-box').querySelector('.smart-box-content');
             const originalText = content.textContent.trim();
-            
+
+            const toneElement = document.getElementById('toneSelector');
+            const tone = toneElement ? toneElement.value : 'professional';
+
             // Add loading state
             const originalContent = content.innerHTML;
             content.innerHTML = '<span class="ai-loading"> <i class="fas fa-spinner fa-spin"></i> Shortening...</span>';
             button.disabled = true;
-            
+
             try {
                 const context = extractContext(button);
-                
+
                 const response = await fetch('/api/ai/generate-sentence', {
                     method: 'POST',
                     headers: {
@@ -6677,13 +6879,13 @@
                         currentSentence: originalText,
                         previousContext: context.previousContext,
                         currentParagraph: context.currentParagraph,
-                        tone: 'professional',
+                        tone: tone,
                         emailContext: context.emailContext
                     })
                 });
 
                 const result = await response.json();
-                
+
                 if (result.success) {
                     content.innerHTML = result.sentence;
                     content.style.animation = 'highlight 0.5s ease';
@@ -6693,17 +6895,17 @@
                 } else {
                     throw new Error(result.error || 'Failed to shorten sentence');
                 }
-                
+
             } catch (error) {
                 console.error('Error shortening sentence:', error);
                 content.innerHTML = originalContent;
-                
+
                 const errorSpan = document.createElement('span');
                 errorSpan.textContent = ' (Error shortening)';
                 errorSpan.style.color = '#ff6b6b';
                 errorSpan.style.fontSize = '0.8em';
                 content.appendChild(errorSpan);
-                
+
                 setTimeout(() => {
                     if (errorSpan.parentNode) {
                         errorSpan.remove();
@@ -6711,6 +6913,7 @@
                 }, 3000);
             } finally {
                 button.disabled = false;
+                wrapper.dataset.loading = "false";
             }
         }
 
@@ -6854,7 +7057,7 @@
             item.timestamp = item.timestamp || new Date().toISOString();
             item.status = item.status || 'ready';
             item.selected = false;
-
+            
             aiQueue.unshift(item);
             updateAIQueueCount();
 
@@ -7074,7 +7277,15 @@
 
                         // Set the draft content in the appropriate editor
                         if (window.editorInstance) {
-                            window.editorInstance.html.set(draftContent);
+                            // window.editorInstance.html.set(draftContent);
+                            // window.editorInstance.html.set(draftContent.replace(/\n/g, '<br>'));
+                            const htmlContent = draftContent
+                                .split('\n\n')
+                                .filter(para => para.trim())
+                                .map(para => `<p style="margin-bottom: 16px;">${para.replace(/\n/g, '<br>')}</p>`)
+                                .join('');
+
+                            window.editorInstance.html.set(htmlContent);
                         } else {
                             // Fallback: set content directly
                             const draftContentElement = document.getElementById('draftContent');
@@ -7215,7 +7426,19 @@
         // Enhanced email send function to add to queue
         const originalSendEmail = window.sendEmail;
         window.sendEmail = function () {
-            const currentContent = getCurrentEditorContent();
+            // const currentContent = getCurrentEditorContent();
+            const aiModeToggle = document.getElementById('aiModeToggle')
+            const aiInlineModeToggle = document.getElementById('aiInlineModeToggle')
+
+            let currentContent = ''
+            if (aiInlineModeToggle.checked || aiModeToggle.checked) {
+                const htmlElement = document.getElementById('emailEditor');
+
+                currentContent = convertHTMLToEmail(htmlElement)
+            } else {
+                currentContent = getCurrentEditorContent()
+            }
+
             const promptElement = document.getElementById('composePrompt');
             const toneElement = document.getElementById('toneSelector');
             const prompt = promptElement ? promptElement.value : '';
@@ -7292,7 +7515,7 @@
             const aiQueueRespose = await fetch(API_BASE_URL + '/ai/queue');
             const aiQueueResult = await aiQueueRespose.json();
             setTimeout(() => {
-                aiQueue.push(aiQueueResult);
+                // aiQueue.push(aiQueueResult);
             }, 1000);
             // setTimeout(() => {
             //     addToAIQueue({
