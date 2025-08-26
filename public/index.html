@@ -2082,6 +2082,24 @@
             color: #c41e3a;
         }
 
+        .micro-action:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: #f9f9f9;
+            color: #9ca3af;
+        }
+
+        .ai-loading {
+            color: #c41e3a;
+            font-style: italic;
+            animation: pulse 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.6; }
+            to { opacity: 1; }
+        }
+
         /* Send section */
         .send-section {
             padding: 20px 24px;
@@ -3763,6 +3781,9 @@
         }
 
         function displayEmailDetail(email) {
+            // Set current email data for AI context
+            window.currentEmailData = email;
+            
             const senderName = extractNameFromEmail(email.sender);
             const formattedDate = email.date ?
                 new Date(email.date).toLocaleDateString('en-US', {
@@ -5236,6 +5257,7 @@
                         window.editorSyncTimeout = setTimeout(() => {
                             if (!isAIEditor && emailDraftData) {
                                 const htmlContent = window.editorInstance.html.get();
+                                console.log(htmlContent, 'htmlContent-----------------------------------');
                                 const textContent = htmlContent.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '');
                                 emailDraftData.draft.body = textContent;
 
@@ -5639,6 +5661,8 @@
                 }
 
                 const viewer = document.querySelector("#draftContent > div.fr-wrapper > div")
+                console.log(viewer, 'viewer-----------------------------------');
+                
                 emailDraftData.draft = viewer.innerText
                 htmlData = convertEmailToHTML(emailDraftData.draft)
                 document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = htmlData
@@ -6455,43 +6479,239 @@
             activeSmartBox = null;
         }
 
-        function regenerateSentence(button, sentenceId) {
-            const content = button.closest('.smart-box').querySelector('.smart-box-content');
-            const alts = alternatives[sentenceId] || inlineAlternatives[sentenceId];
+        // Helper function to extract context for AI generation
+        function extractContext(button) {
+            const smartBox = button.closest('.smart-box-wrapper');
+            const currentSentence = smartBox.querySelector('.smart-box-content').textContent.trim();
+            
+            // Find the current paragraph
+            const paragraph = smartBox.closest('.paragraph');
+            let currentParagraph = '';
+            let previousContext = '';
+            
+            if (paragraph) {
+                // Get current paragraph text (excluding the smart box content)
+                const paragraphClone = paragraph.cloneNode(true);
+                const smartBoxes = paragraphClone.querySelectorAll('.smart-box-wrapper');
+                smartBoxes.forEach(box => {
+                    const originalText = box.dataset.sentenceId ? 
+                        box.querySelector('.smart-box-content').textContent : '';
+                    const textNode = document.createTextNode(originalText);
+                    box.parentNode.replaceChild(textNode, box);
+                });
+                currentParagraph = paragraphClone.textContent.trim();
+                
+                // Get previous paragraphs for context (up to 2 previous paragraphs)
+                const allParagraphs = Array.from(document.querySelectorAll('.paragraph'));
+                const currentIndex = allParagraphs.indexOf(paragraph);
+                const previousParagraphs = allParagraphs.slice(Math.max(0, currentIndex - 2), currentIndex);
+                
+                previousContext = previousParagraphs.map(p => {
+                    const clone = p.cloneNode(true);
+                    const boxes = clone.querySelectorAll('.smart-box-wrapper');
+                    boxes.forEach(box => {
+                        const text = box.querySelector('.smart-box-content').textContent;
+                        box.parentNode.replaceChild(document.createTextNode(text), box);
+                    });
+                    return clone.textContent.trim();
+                }).join(' ');
+            }
+            
+            // Extract email context if available
+            const emailContext = {
+                subject: window.currentEmailData?.subject || '',
+                sender: window.currentEmailData?.sender || '',
+                sentiment: window.currentEmailData?.analysis?.sentiment_category || ''
+            };
+            
+            return {
+                currentSentence,
+                currentParagraph,
+                previousContext,
+                emailContext
+            };
+        }
 
-            if (alts) {
-                const currentText = content.innerHTML;
-                const newText = alts.find(alt => alt !== currentText) || alts[0];
-                content.innerHTML = newText;
-                content.style.animation = 'highlight 0.5s ease';
+        // Dynamic AI-powered sentence regeneration
+        async function regenerateSentence(button, sentenceId) {
+            const content = button.closest('.smart-box').querySelector('.smart-box-content');
+            const originalText = content.textContent.trim();
+            
+            // Add loading state
+            const originalContent = content.innerHTML;
+            content.innerHTML = '<span class="ai-loading"><i class="fas fa-spinner fa-spin"></i> Generating...</span>';
+            button.disabled = true;
+            
+            try {
+                const context = extractContext(button);
+                
+                const response = await fetch('/api/ai/generate-sentence', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'regenerate',
+                        currentSentence: originalText,
+                        previousContext: context.previousContext,
+                        currentParagraph: context.currentParagraph,
+                        tone: 'professional',
+                        emailContext: context.emailContext
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    content.innerHTML = result.sentence;
+                    content.style.animation = 'highlight 0.5s ease';
+                    setTimeout(() => {
+                        content.style.animation = '';
+                    }, 500);
+                } else {
+                    throw new Error(result.error || 'Failed to generate sentence');
+                }
+                
+            } catch (error) {
+                console.error('Error regenerating sentence:', error);
+                // Fallback to original content on error
+                content.innerHTML = originalContent;
+                
+                // Show error briefly
+                const errorSpan = document.createElement('span');
+                errorSpan.textContent = ' (Error generating)';
+                errorSpan.style.color = '#ff6b6b';
+                errorSpan.style.fontSize = '0.8em';
+                content.appendChild(errorSpan);
+                
                 setTimeout(() => {
-                    content.style.animation = '';
-                }, 500);
-            } else {
-                const genericAlts = [
-                    "Thank you for bringing this to my attention.",
-                    "I appreciate your feedback on this matter.",
-                    "I'll look into this and get back to you soon.",
-                    "This is an important point to consider.",
-                    "I understand your concern and will address it."
-                ];
-                content.innerHTML = genericAlts[Math.floor(Math.random() * genericAlts.length)];
-                content.style.animation = 'highlight 0.5s ease';
-                setTimeout(() => {
-                    content.style.animation = '';
-                }, 500);
+                    if (errorSpan.parentNode) {
+                        errorSpan.remove();
+                    }
+                }, 3000);
+            } finally {
+                button.disabled = false;
             }
         }
 
-        function expandSentence(button) {
+        // Dynamic AI-powered sentence expansion
+        async function expandSentence(button) {
             const content = button.closest('.smart-box').querySelector('.smart-box-content');
-            content.innerHTML += ' I\'ll keep you updated on progress.';
+            const originalText = content.textContent.trim();
+            
+            // Add loading state
+            const originalContent = content.innerHTML;
+            content.innerHTML = '<span class="ai-loading"> <i class="fas fa-spinner fa-spin"></i> Expanding...</span>';
+            button.disabled = true;
+            
+            try {
+                const context = extractContext(button);
+                
+                const response = await fetch('/api/ai/generate-sentence', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'expand',
+                        currentSentence: originalText,
+                        previousContext: context.previousContext,
+                        currentParagraph: context.currentParagraph,
+                        tone: 'professional',
+                        emailContext: context.emailContext
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    content.innerHTML = result.sentence;
+                    content.style.animation = 'highlight 0.5s ease';
+                    setTimeout(() => {
+                        content.style.animation = '';
+                    }, 500);
+                } else {
+                    throw new Error(result.error || 'Failed to expand sentence');
+                }
+                
+            } catch (error) {
+                console.error('Error expanding sentence:', error);
+                content.innerHTML = originalContent;
+                
+                const errorSpan = document.createElement('span');
+                errorSpan.textContent = ' (Error expanding)';
+                errorSpan.style.color = '#ff6b6b';
+                errorSpan.style.fontSize = '0.8em';
+                content.appendChild(errorSpan);
+                
+                setTimeout(() => {
+                    if (errorSpan.parentNode) {
+                        errorSpan.remove();
+                    }
+                }, 3000);
+            } finally {
+                button.disabled = false;
+            }
         }
 
-        function shortenSentence(button) {
+        // Dynamic AI-powered sentence shortening
+        async function shortenSentence(button) {
             const content = button.closest('.smart-box').querySelector('.smart-box-content');
-            const words = content.textContent.split(' ');
-            content.innerHTML = words.slice(0, Math.ceil(words.length / 2)).join(' ') + '.';
+            const originalText = content.textContent.trim();
+            
+            // Add loading state
+            const originalContent = content.innerHTML;
+            content.innerHTML = '<span class="ai-loading"> <i class="fas fa-spinner fa-spin"></i> Shortening...</span>';
+            button.disabled = true;
+            
+            try {
+                const context = extractContext(button);
+                
+                const response = await fetch('/api/ai/generate-sentence', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'shorten',
+                        currentSentence: originalText,
+                        previousContext: context.previousContext,
+                        currentParagraph: context.currentParagraph,
+                        tone: 'professional',
+                        emailContext: context.emailContext
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    content.innerHTML = result.sentence;
+                    content.style.animation = 'highlight 0.5s ease';
+                    setTimeout(() => {
+                        content.style.animation = '';
+                    }, 500);
+                } else {
+                    throw new Error(result.error || 'Failed to shorten sentence');
+                }
+                
+            } catch (error) {
+                console.error('Error shortening sentence:', error);
+                content.innerHTML = originalContent;
+                
+                const errorSpan = document.createElement('span');
+                errorSpan.textContent = ' (Error shortening)';
+                errorSpan.style.color = '#ff6b6b';
+                errorSpan.style.fontSize = '0.8em';
+                content.appendChild(errorSpan);
+                
+                setTimeout(() => {
+                    if (errorSpan.parentNode) {
+                        errorSpan.remove();
+                    }
+                }, 3000);
+            } finally {
+                button.disabled = false;
+            }
         }
 
         function deleteSentence(button) {

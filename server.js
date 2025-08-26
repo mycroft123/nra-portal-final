@@ -1295,6 +1295,122 @@ app.delete('/api/ai/queue/:id', requireAuth, async (req, res) => {
     }
 });
 
+// AI Sentence Generation API
+app.post('/api/ai/generate-sentence', requireAuth, async (req, res) => {
+    try {
+        const { 
+            action, // 'regenerate', 'expand', 'shorten'
+            currentSentence, 
+            previousContext = '', 
+            currentParagraph = '',
+            tone = 'professional',
+            emailContext = {}
+        } = req.body;
+
+        if (!currentSentence || !action) {
+            return res.status(400).json({
+                success: false,
+                error: 'Current sentence and action are required'
+            });
+        }
+
+        if (!process.env.OPENAI_API_KEY) {
+            return res.status(500).json({
+                success: false,
+                error: 'OpenAI API key not configured'
+            });
+        }
+
+        // Build context-aware prompt based on action
+        let systemPrompt = '';
+        let userPrompt = '';
+
+        const contextInfo = `
+Previous Context: ${previousContext || 'None'}
+Current Paragraph: ${currentParagraph || currentSentence}
+Current Sentence: ${currentSentence}
+Email Context: ${emailContext.subject ? `Subject: ${emailContext.subject}, ` : ''}${emailContext.sender ? `From: ${emailContext.sender}, ` : ''}${emailContext.sentiment ? `Sentiment: ${emailContext.sentiment}` : ''}
+Tone: ${tone}
+`;
+
+        switch (action) {
+            case 'regenerate':
+                systemPrompt = `You are an AI assistant helping to rewrite sentences for professional email communication. 
+                Generate 1 alternative version of the given sentence that:
+                - Maintains the same meaning and intent
+                - Uses a ${tone} tone
+                - Fits naturally with the surrounding context
+                - Is appropriate for NRA leadership communication
+                - Maintains professional email standards
+                
+                Return only the rewritten sentence, no additional text or formatting.`;
+                
+                userPrompt = `Rewrite this sentence while maintaining its meaning:\n\n${contextInfo}`;
+                break;
+
+            case 'expand':
+                systemPrompt = `You are an AI assistant helping to expand sentences for professional email communication.
+                Take the given sentence and expand it with additional relevant detail that:
+                - Adds valuable context or explanation
+                - Maintains a ${tone} tone
+                - Flows naturally with the surrounding content
+                - Is appropriate for NRA leadership communication
+                - Doesn't change the core meaning
+                
+                Return only the expanded sentence, no additional text or formatting.`;
+                
+                userPrompt = `Expand this sentence with relevant additional detail:\n\n${contextInfo}`;
+                break;
+
+            case 'shorten':
+                systemPrompt = `You are an AI assistant helping to shorten sentences for professional email communication.
+                Take the given sentence and make it more concise while:
+                - Preserving the essential meaning
+                - Maintaining a ${tone} tone
+                - Keeping it natural and professional
+                - Being appropriate for NRA leadership communication
+                - Ensuring it still fits the context
+                
+                Return only the shortened sentence, no additional text or formatting.`;
+                
+                userPrompt = `Make this sentence more concise while preserving its meaning:\n\n${contextInfo}`;
+                break;
+
+            default:
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid action. Must be regenerate, expand, or shorten'
+                });
+        }
+
+        const completion = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 200
+        });
+
+        const generatedSentence = completion.choices[0].message.content.trim();
+
+        res.json({
+            success: true,
+            sentence: generatedSentence,
+            action: action,
+            originalSentence: currentSentence
+        });
+
+    } catch (error) {
+        console.error('AI Sentence Generation Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to generate sentence. Please try again.'
+        });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`🎯 NRA Portal Server running on http://localhost:${PORT}`);
