@@ -8,10 +8,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Include Froala Editor style -->
-    <link href="https://cdn.jsdelivr.net/npm/froala-editor@4.0.16/css/froala_editor.pkgd.min.css" rel="stylesheet" />
+    <link href="/public/froala/css/froala_editor.pkgd.min.css" rel="stylesheet" />
 
     <!-- Include Froala Editor script -->
-    <script src="https://cdn.jsdelivr.net/npm/froala-editor@4.0.16/js/froala_editor.pkgd.min.js"></script>
+    <script src="/public/froala/js/froala_editor.pkgd.min.js"></script>
     <style>
         /* Include all the original styles plus new ones for AI features */
         * {
@@ -6502,7 +6502,7 @@
         function convertHTMLToEmail(htmlElement) {
             let emailText = '';
             const paragraphs = [...htmlElement.querySelectorAll('.paragraph')];
-            
+
             for (let i = 0; i < paragraphs.length; i++) {
                 const paragraph = paragraphs[i];
 
@@ -7057,7 +7057,7 @@
             item.timestamp = item.timestamp || new Date().toISOString();
             item.status = item.status || 'ready';
             item.selected = false;
-            
+
             aiQueue.unshift(item);
             updateAIQueueCount();
 
