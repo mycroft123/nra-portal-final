@@ -1989,6 +1989,37 @@
             color: #c41e3a;
         }
 
+        /* List item styling in AI mode */
+        .ai-sentence.list-item {
+            display: block;
+            margin: 4px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .ai-sentence.list-item[data-list-type="ol"] {
+            counter-increment: list-counter;
+        }
+
+        .ai-sentence.list-item[data-list-type="ol"]:before {
+            content: counter(list-counter) ". ";
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .ai-sentence.list-item[data-list-type="ul"]:before {
+            content: "• ";
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        /* Reset counter for new lists */
+        .email-editor {
+            counter-reset: list-counter;
+        }
+
         /* Smart box on hover */
         .smart-box-wrapper {
             position: relative;
@@ -2320,6 +2351,12 @@
             color: #605e5c;
         }
 
+        .ai-queue-header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
         .ai-queue-filters {
             background: white;
             padding: 16px;
@@ -2479,7 +2516,6 @@
             font-size: 14px;
             line-height: 1.5;
             max-height: 150px;
-            overflow-y: auto;
         }
 
         .ai-queue-inline-replies {
@@ -2742,11 +2778,6 @@
             background: #545b62;
         }
 
-        #draftContent>div.fr-wrapper:has(> div:nth-child(2))>div:nth-child(1) {
-            display: none;
-        }
-
-
         #emailContent::-webkit-scrollbar {
             display: none;
         }
@@ -2992,8 +3023,14 @@
                     <div class="ai-queue-title">
                         AI Queue
                     </div>
-                    <div class="ai-queue-stats">
-                        <span id="aiQueueTotal">0</span> pending responses
+                    <div class="ai-queue-header-right">
+                        <div class="ai-queue-stats">
+                            <span id="aiQueueTotal">0</span> pending responses
+                        </div>
+                        <button class="toolbar-btn" onclick="deleteAllAIQueue()">
+                            <i class="fas fa-broom"></i>
+                            Clear All
+                        </button>
                     </div>
                 </div>
 
@@ -3002,14 +3039,14 @@
                         <span class="ai-queue-filter-label">Status:</span>
                         <div class="ai-queue-filter-chip active" onclick="filterAIQueue('all', this)">All</div>
                         <div class="ai-queue-filter-chip" onclick="filterAIQueue('ready', this)">Ready to Send</div>
-                        <div class="ai-queue-filter-chip" onclick="filterAIQueue('needs-review', this)">Needs Review
+                        <div class="ai-queue-filter-chip" onclick="filterAIQueue('review', this)">Needs Review
                         </div>
+                        <div class="ai-queue-filter-chip" onclick="filterAIQueue('sent', this)">Sent</div>
                     </div>
                     <div class="ai-queue-filter-row">
                         <span class="ai-queue-filter-label">Type:</span>
                         <div class="ai-queue-filter-chip" onclick="filterAIQueue('reply', this)">Replies</div>
                         <div class="ai-queue-filter-chip" onclick="filterAIQueue('compose', this)">Composed</div>
-                        <div class="ai-queue-filter-chip" onclick="filterAIQueue('inline', this)">Inline Responses</div>
                     </div>
                     <div class="ai-queue-filter-row">
                         <span class="ai-queue-filter-label">Priority:</span>
@@ -3274,9 +3311,10 @@
 
             <div class="compose-modal-footer">
                 <div class="compose-send-actions">
-                    <button class="send-btn" onclick="sendEmail()" id="sendEmailBtn" disabled>
-                        <i class="fas fa-paper-plane"></i>
-                        Send Email
+                    <button class="send-btn" onclick="saveToAIQueue()" id="sendEmailBtn" disabled
+                        title="Save to AI Queue">
+                        <i class="fas fa-save"></i>
+                        Save
                     </button>
                     <button class="schedule-btn" onclick="scheduleEmail()">
                         <i class="fas fa-clock"></i>
@@ -5215,7 +5253,7 @@
             }
         }
 
-        let emailDraftData = null;
+        let emailDraftData = {};
 
         function initializeEditor() {
             if (window.editorInstance) {
@@ -5229,6 +5267,7 @@
             }
 
             window.editorInstance = new FroalaEditor('#draftContent', {
+                key: 'BWC6D-16E3F3E1F1C1A17A7wc2DBKSPJ1WKTUCQOd1OURPE1KDc1C-7J2A4D4A4C6E2G3F4G1D1==',
                 toolbarButtons: [
                     'bold', 'italic', 'underline', '|',
                     'textColor', 'backgroundColor', 'fontFamily', 'fontSize', '|',
@@ -5260,7 +5299,7 @@
                     'contentChanged': function () {
                         clearTimeout(window.editorSyncTimeout);
                         window.editorSyncTimeout = setTimeout(() => {
-                            if (!isAIEditor && emailDraftData) {
+                            if (!isAIEditor && emailDraftData && emailDraftData.draft) {
                                 const htmlContent = window.editorInstance.html.get();
                                 console.log(htmlContent, 'htmlContent-----------------------------------');
                                 const textContent = htmlContent.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '');
@@ -5275,7 +5314,7 @@
                         }, 500);
                     },
                     'blur': function () {
-                        if (!isAIEditor && emailDraftData) {
+                        if (!isAIEditor && emailDraftData && emailDraftData.draft) {
                             const htmlContent = window.editorInstance.html.get();
                             const textContent = htmlContent.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '');
                             emailDraftData.draft.body = textContent;
@@ -5418,7 +5457,7 @@
             }
         }
 
-        async function generateEmailDraft() {
+        async function generateEmailDraft(type = '') {
             const prompt = document.getElementById('composePrompt').value.trim();
             const tone = document.getElementById('toneSelector').value;
 
@@ -5428,7 +5467,9 @@
             }
 
             const generateBtn = document.querySelector('.generate-btn');
-            generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            if (type !== 'REGENERATE_EMAIL') {
+                generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            }
             generateBtn.disabled = true;
 
             try {
@@ -5676,7 +5717,7 @@
                 const viewer = document.querySelector("#draftContent > div.fr-wrapper > div")
                 console.log(viewer, 'viewer-----------------------------------');
 
-                emailDraftData.draft = viewer.innerText
+                emailDraftData.draft = viewer.innerHTML
                 htmlData = convertEmailToHTML(emailDraftData.draft)
                 document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = htmlData
             } else {
@@ -5684,7 +5725,7 @@
 
                 const normalText = convertHTMLToEmail(htmlElement)
                 emailDraftData.draft = normalText
-                document.querySelector("#draftContent > div.fr-wrapper > div").innerText = normalText
+                document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = normalText
             }
         }
 
@@ -5721,7 +5762,7 @@
 
                 // showInlineReply1()  
                 const viewer = document.querySelector("#draftContent > div.fr-wrapper > div")
-                emailDraftData.draft = viewer.innerText
+                emailDraftData.draft = viewer.innerHTML
                 htmlData = convertEmailToHTML1(emailDraftData.draft)
                 document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = htmlData
             } else {
@@ -5729,7 +5770,7 @@
 
                 const normalText = convertHTMLToEmail(htmlElement)
                 emailDraftData.draft = normalText
-                document.querySelector("#draftContent > div.fr-wrapper > div").innerText = normalText
+                document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = normalText
             }
         }
 
@@ -5896,7 +5937,7 @@
                 const htmlElement = document.getElementById('emailEditor');
                 return convertHTMLToEmail(htmlElement)
             } else {
-                return document.querySelector("#draftContent > div.fr-wrapper > div").innerText
+                return document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML
             }
         }
 
@@ -5905,11 +5946,11 @@
             if (modalTitle.includes('Reply with AI')) {
                 await generateAIReply();
             } else {
-                await generateEmailDraft();
+                await generateEmailDraft('REGENERATE_EMAIL');
             }
         }
 
-        function sendEmail() {
+        function saveToAIQueue() {
             const currentContent = getCurrentEditorContent();
             if (!currentContent.trim()) {
                 alert('Please generate a draft first.');
@@ -5917,10 +5958,10 @@
             }
             console.log(currentContent, 'Send EMail:   currentContent------------------------');
             // TODO:
-            // 1. Send the email
+            // 1. Save the email to the AI Queue
             // 2. Update the queue item status to sent
-            // 3. Update the queue item status to failed if the email sending fails
-            alert('Email sent successfully!');
+            // 3. Update the queue item status to failed if the email saving fails
+            alert('Email saved to AI Queue successfully!');
             closeComposeModal();
         }
 
@@ -5956,105 +5997,6 @@
 
         let activeSmartBox = null;
         let hoverTimeout = null;
-
-        // Alternative sentences for regular replies
-        const alternatives = {
-            1: ["Hi Tom,", "Hello Tom,", "Good afternoon Tom,"],
-            2: ["Thanks for sending over the action items from our meeting.", "Thank you for the comprehensive meeting summary.", "I appreciate you sending the action items."],
-            3: ["I've reviewed each item and here's my status update:", "Here's where we stand on each item:", "I've made progress on several items:"],
-            4: ["For the landing page update, I'll have the designs ready by Thursday EOD.", "The landing page designs are on track for Thursday delivery.", "I'm finalizing the landing page designs - expect them Thursday."],
-            5: ["I've already started implementing the new color palette and typography guidelines.", "The new brand guidelines are being applied to all components.", "Brand guideline implementation is underway."],
-            6: ["Regarding the mobile navigation bug, I met with Alex from the dev team this morning.", "Alex and I discussed the navigation issue earlier today.", "The dev team and I have identified the mobile nav problem."],
-            7: ["We've identified the issue and expect to deploy a fix by tomorrow.", "The fix is ready and will go live tomorrow.", "We'll have this resolved by end of day tomorrow."],
-            8: ["For the Q3 user feedback summary, I'll need access to the analytics dashboard.", "I require analytics dashboard permissions to complete the Q3 summary.", "Once I get dashboard access, I can start on the Q3 feedback analysis."],
-            9: ["Once I have permissions, I can have the summary ready by Monday for your review.", "The summary will be ready Monday after I receive access.", "Expect the completed summary by Monday morning."],
-            10: ["I reviewed the onboarding flow mockups yesterday and left detailed feedback in Figma.", "My feedback on the onboarding mockups is now in Figma.", "I've annotated the onboarding flows with my recommendations."],
-            11: ["Overall they look great, with just a few minor adjustments needed for accessibility.", "The designs are solid - just need some accessibility improvements.", "They're nearly perfect, pending minor accessibility updates."],
-            12: ["I'll send out calendar invites for the stakeholder interviews today.", "Stakeholder interview invitations will go out this afternoon.", "I'm scheduling the stakeholder sessions now."],
-            13: ["Do you have a preferred order, or should I prioritize based on availability?", "Should I prioritize certain stakeholders or go by availability?", "Any preference on interview order, or should I optimize for schedules?"],
-            14: ["Let me know if you need any clarification on these items.", "Please reach out if you need more details on any item.", "Happy to discuss any of these points further."],
-            15: ["Best,<br>Sarah", "Thanks,<br>Sarah", "Regards,<br>Sarah"]
-        };
-
-        // Alternative sentences for inline replies
-        // const inlineAlternatives = {
-        //     intro: ["Thanks for the comprehensive update, Tom.", "Thanks for the clear action items, Tom.", "I appreciate the detailed follow-up, Tom."],
-        //     r1: ["✓ On track - designs will be ready Thursday EOD", "✓ Already 70% complete - delivering Thursday", "✓ Working on this now - Thursday delivery confirmed"],
-        //     r2: ["✓ In progress - fix deploying tomorrow", "✓ Bug identified and fixed - deploying soon", "✓ Alex and I resolved this - going live tomorrow"],
-        //     r3: ["⚠️ Need dashboard access - will deliver Monday once granted", "⚠️ Awaiting permissions - ready to start analysis", "⚠️ Can complete by Monday with dashboard access"],
-        //     r4: ["✓ Completed - feedback provided in Figma", "✓ Done - left detailed comments yesterday", "✓ Reviewed and approved with minor notes"],
-        //     r5: ["→ Will send invites today - any priority order?", "→ Scheduling this afternoon - please advise on sequence", "→ Ready to book meetings - need your input on order"],
-        //     closing: ["All items are progressing well. I'll keep you updated on any changes.", "Everything is on track. Let me know if priorities shift.", "Good progress across all items. Will update you on any blockers."],
-        //     sig: ["Best,<br>Sarah", "Thanks,<br>Sarah", "Regards,<br>Sarah"]
-        // };
-
-        const inlineAlternatives = {
-            intro: [
-                "Mark, I appreciate you taking the time to share your concerns so clearly. Please find brief, direct answers to your questions below.",
-                "Thank you, Mark, for raising these important issues. I've outlined straightforward responses to help address each point you brought up.",
-                "Mark, thank you for your honest feedback and thoughtful questions. Below are clear, concise responses to each of your concerns."
-            ],
-            q1: [
-                "Wayne LaPierre and others were named in court filings over misuse of NRA funds.",
-                "Former leadership, including LaPierre, was found to have misused contributions for personal benefit.",
-                "Wayne LaPierre and several executives were named in financial investigations."
-            ],
-            q2: [
-                "Reports cite multiple executives and several outside contractors.",
-                "At least a handful of individuals were implicated during audits and investigations.",
-                "Several, including key executives and vendors with questionable contracts."
-            ],
-            q3: [
-                "Luxury travel, private flights, and clothing were charged to NRA accounts.",
-                "Member dues were reportedly spent on unauthorized perks and inflated contracts.",
-                "Misuse of funds on private jets, luxury suits, travel, and vendor kickbacks."
-            ],
-            q4: [
-                "Past leadership chose not to disclose internal issues transparently.",
-                "The NRA failed to get ahead of the story, allowing external media to control the narrative.",
-                "Because past leadership failed to provide internal transparency or updates."
-            ],
-            q5: [
-                "They didn’t stay long—internal issues and external pressure led to rapid turnover.",
-                "Leadership changes continued as the organization worked to stabilize direction.",
-                "They resigned or were replaced during continued legal and internal changes."
-            ],
-            q6: [
-                "He cited differences with the board and concerns about reform efforts.",
-                "Barr resigned amid ongoing organizational struggles and internal disagreements.",
-                "He stepped down citing governance concerns and lack of alignment with leadership."
-            ],
-            q7: [
-                "He was removed after calling for an internal audit; no return has been discussed.",
-                "Tensions with prior leadership led to his exit; new leadership hasn't reinstated him.",
-                "He was ousted after challenging financial mismanagement; no return has been proposed."
-            ],
-            q8: [
-                "A lack of candidate profiles makes it hard—an online introduction portal would help.",
-                "Better member engagement tools are needed to inform votes and boost trust.",
-                "Fully agree—a public online forum for candidates is needed and worth proposing."
-            ],
-            q9: [
-                "That gap in official communication is being addressed going forward.",
-                "The organization is working to ensure future changes are communicated directly to members.",
-                "A key failure of communication we are working to correct through member channels."
-            ],
-            q10: [
-                "He brought a unique voice—his presence is deeply missed by many.",
-                "We're exploring writers who can bring that same authority and enthusiasm.",
-                "Wiley’s voice was unique—we’re working to fill that space with meaningful content."
-            ],
-            closing: [
-                "Thank you again for raising these concerns. Member input helps shape a better NRA.",
-                "We appreciate your commitment to the organization—transparency will remain a top priority.",
-                "Your voice matters, and feedback like this is helping guide positive change."
-            ],
-            sig: [
-                "Respectfully,<br>Mjowett",
-                "Sincerely,<br>Mjowett",
-                "Thank you,<br>Mjowett"
-            ]
-        }
 
         function showReply() {
             const emailContent = document.getElementById('emailContent');
@@ -6195,275 +6137,267 @@
             }, 100);
         }
 
-        function showInlineReply1() {
-            document.querySelector('.fr-element.fr-view').innerHTML = `
-            <div class="email-editor inline-reply-mode" id="emailEditor" contenteditable="true">
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="inline-response ai-sentence" data-id="intro" onclick="convertToSmartBox(this)">
-            Mark, thank you for your honest feedback and thoughtful questions. Below are clear, concise responses to each of your concerns.
-        </span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="original-text">Who misused NRA members’ contributions?</span><br>
-        <span class="inline-response ai-sentence" data-id="q1" onclick="convertToSmartBox(this)">Wayne LaPierre and several executives were named in financial investigations.</span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="original-text">How many people were involved?</span><br>
-        <span class="inline-response ai-sentence" data-id="q2" onclick="convertToSmartBox(this)">Several, including key executives and vendors with questionable contracts.</span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="original-text">What were the specific instances of malfeasance?</span><br>
-        <span class="inline-response ai-sentence" data-id="q3" onclick="convertToSmartBox(this)">Misuse of funds on private jets, luxury suits, travel, and vendor kickbacks.</span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="original-text">Why do members have to hear about NRA improprieties from media outlets?</span><br>
-        <span class="inline-response ai-sentence" data-id="q4" onclick="convertToSmartBox(this)">Because past leadership failed to provide internal transparency or updates.</span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="original-text">What happened to the first group of NRA leadership administrators who came after Wayne LaPierre?</span><br>
-        <span class="inline-response ai-sentence" data-id="q5" onclick="convertToSmartBox(this)">They resigned or were replaced during continued legal and internal changes.</span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="original-text">Why did Bob Barr leave?</span><br>
-        <span class="inline-response ai-sentence" data-id="q6" onclick="convertToSmartBox(this)">He stepped down citing governance concerns and lack of alignment with leadership.</span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="original-text">Why isn’t Lieutenant Colonel Oliver North associated with NRA leadership anymore?</span><br>
-        <span class="inline-response ai-sentence" data-id="q7" onclick="convertToSmartBox(this)">He was ousted after challenging financial mismanagement; no return has been proposed.</span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="original-text">Why don't we get to know leadership candidates before voting?</span><br>
-        <span class="inline-response ai-sentence" data-id="q8" onclick="convertToSmartBox(this)">Fully agree—a public online forum for candidates is needed and worth proposing.</span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="original-text">Why do we find out about major NRA changes from the media or Wikipedia instead of the NRA itself?</span><br>
-        <span class="inline-response ai-sentence" data-id="q9" onclick="convertToSmartBox(this)">A key failure of communication we are working to correct through member channels.</span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="original-text">Wiley Clapp’s “Fightin’ Iron” column is missed. What now?</span><br>
-        <span class="inline-response ai-sentence" data-id="q10" onclick="convertToSmartBox(this)">Wiley’s voice was unique—we’re working to fill that space with meaningful content.</span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="inline-response ai-sentence" data-id="closing" onclick="convertToSmartBox(this)">
-            Thank you again for speaking up. Member feedback like yours helps drive necessary change.
-        </span>
-    </div>
- 
-    <div class="add-line-container">
-        <button class="add-line-btn" onclick="addNewLine(this)">+</button>
-    </div>
- 
-    <div class="paragraph" contenteditable="true">
-        <span class="inline-response ai-sentence" data-id="sig" onclick="convertToSmartBox(this)">
-            Respectfully,<br>
-            Mjowett
-        </span>
-    </div>
- 
-</div>
- 
-            `;
-
-            document.getElementById('replySection').classList.add('active', 'inline-reply-mode');
-            document.querySelector('.reply-options').style.display = 'none';
-
-            // Add event listeners for inline reply mode
-            const editor = document.getElementById('emailEditor');
-            editor.addEventListener('input', handleEditorInput);
-            editor.addEventListener('keydown', handleKeyDown);
-
-            // Re-attach tone selector handlers
-            document.querySelectorAll('.tone-chip').forEach(chip => {
-                chip.addEventListener('click', function () {
-                    document.querySelectorAll('.tone-chip').forEach(c => c.classList.remove('active'));
-                    this.classList.add('active');
-                });
-            });
-        }
-
-        function convertEmailToHTML(emailText) {
+        function convertEmailToHTML(emailHTML) {
             let dataId = 1;
             let htmlOutput = '<div class="email-editor editable-mode" id="emailEditor" contenteditable="true">\n';
 
-            // Split text into top-level paragraphs by \n\n
-            const paragraphs = emailText.trim().split(/\n{2,}/);
+            // Create a temporary div to parse the HTML
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = emailHTML;
 
-            paragraphs.forEach((paragraph, index) => {
-                // Check if this is a list-type paragraph (contains numbered lines like 1., 2., 3.)
-                const lines = paragraph.split('\n').map(line => line.trim()).filter(line => line);
+            // Get all paragraph elements and list elements from Froala
+            const froalaElements = tempDiv.querySelectorAll('p, div, ol, ul, li');
 
-                // If multiple lines and lines start with 1. 2. 3. etc., treat each as its own paragraph
-                const isNumberedList = lines.length > 1 && lines.every(line => /^\d+\./.test(line));
-
-                if (isNumberedList) {
-                    lines.forEach(line => {
-                        htmlOutput += '    <div class="paragraph">\n';
-                        const parts = line.match(/(\d+\.)|[^.!?]+[.!?]+|[^.!?]+$/g) || [line];
-                        parts.forEach(part => {
-                            const trimmed = part.trim();
-                            if (trimmed.length > 0) {
-                                htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmed}</span>\n`;
-                            }
+            if (froalaElements.length === 0) {
+                // If no paragraphs, treat as single paragraph
+                const content = tempDiv.innerHTML || emailHTML;
+                htmlOutput += '    <div class="paragraph">\n';
+                htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${content}</span>\n`;
+                htmlOutput += '    </div>\n';
+                htmlOutput += '    <div class="add-line-container">\n';
+                htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                htmlOutput += '    </div>\n';
+            } else {
+                // Process elements while preserving list structures
+                let processedElements = new Set(); // Track processed elements to avoid duplicates
+                
+                froalaElements.forEach((element, index) => {
+                    // Skip if this element was already processed as part of a list
+                    if (processedElements.has(element)) return;
+                    
+                    const tagName = element.tagName.toLowerCase();
+                    
+                    if (tagName === 'ol' || tagName === 'ul') {
+                        // Handle ordered and unordered lists
+                        processedElements.add(element);
+                        const listItems = element.querySelectorAll('li');
+                        
+                        listItems.forEach(li => {
+                            processedElements.add(li);
+                            const liHTML = li.innerHTML;
+                            htmlOutput += '    <div class="paragraph">\n';
+                            htmlOutput += `        <span class="ai-sentence list-item" data-list-type="${tagName}" data-id="${dataId++}" onclick="convertToSmartBox(this)">${liHTML}</span>\n`;
+                            htmlOutput += '    </div>\n';
+                            htmlOutput += '    <div class="add-line-container">\n';
+                            htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                            htmlOutput += '    </div>\n';
                         });
+                    } else if (tagName === 'li' && !processedElements.has(element)) {
+                        // Handle standalone list items (shouldn't normally happen, but just in case)
+                        processedElements.add(element);
+                        const liHTML = element.innerHTML;
+                        const parentList = element.closest('ol, ul');
+                        const listType = parentList ? parentList.tagName.toLowerCase() : 'ul';
+                        
+                        htmlOutput += '    <div class="paragraph">\n';
+                        htmlOutput += `        <span class="ai-sentence list-item" data-list-type="${listType}" data-id="${dataId++}" onclick="convertToSmartBox(this)">${liHTML}</span>\n`;
                         htmlOutput += '    </div>\n';
                         htmlOutput += '    <div class="add-line-container">\n';
                         htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
                         htmlOutput += '    </div>\n';
-                    });
-                } else {
-                    // For last paragraph: convert internal \n to <br>
-                    if (index === paragraphs.length - 1) {
-                        // Escape HTML special chars just in case, then replace \n with <br>
-                        const escapedText = paragraph
-                            .replace(/&/g, "&amp;")
-                            .replace(/</g, "&lt;")
-                            .replace(/>/g, "&gt;");
+                    } else if (tagName === 'p' || tagName === 'div') {
+                        // Handle regular paragraphs and divs
+                        processedElements.add(element);
+                        const paraHTML = element.innerHTML;
 
-                        const withBr = escapedText.replace(/\n/g, '<br>');
-                        htmlOutput += '    <div class="paragraph">\n';
-                        htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${withBr}</span>\n`;
-                        htmlOutput += '    </div>\n';
-                        htmlOutput += '    <div class="add-line-container">\n';
-                        htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
-                        htmlOutput += '    </div>\n';
-                    } else {
+                        // Check if this looks like a numbered list item (fallback for manually typed lists)
+                        const isNumberedList = /^\d+\./.test(element.textContent.trim());
 
-                        // Normal paragraph: split into sentences
-                        const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [paragraph];
-                        htmlOutput += '    <div class="paragraph">\n';
-                        sentences.forEach(sentence => {
-                            const trimmed = sentence.trim();
-                            if (trimmed.length > 0) {
-                                htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmed}</span>\n`;
-                            }
-                        });
-                        htmlOutput += '    </div>\n';
+                        if (isNumberedList) {
+                            // For numbered lists, keep as single sentence to preserve formatting
+                            htmlOutput += '    <div class="paragraph">\n';
+                            htmlOutput += `        <span class="ai-sentence list-item" data-list-type="ol" data-id="${dataId++}" onclick="convertToSmartBox(this)">${paraHTML}</span>\n`;
+                            htmlOutput += '    </div>\n';
+                        } else {
+                            // For regular paragraphs, try to split by sentences while preserving formatting
+                            const sentences = splitHTMLBySentences(paraHTML);
+                            htmlOutput += '    <div class="paragraph">\n';
+                            sentences.forEach(sentence => {
+                                if (sentence.trim().length > 0) {
+                                    htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${sentence}</span>\n`;
+                                }
+                            });
+                            htmlOutput += '    </div>\n';
+                        }
+
                         htmlOutput += '    <div class="add-line-container">\n';
                         htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
                         htmlOutput += '    </div>\n';
                     }
-                }
-            });
+                });
+            }
 
             htmlOutput += '</div>';
             return htmlOutput;
         }
 
-        function convertEmailToHTML1(emailText) {
+        function splitHTMLBySentences(htmlContent) {
+            const sentences = htmlContent.match(/[^.!?]+[.!?]+/g) || [htmlContent];
+            return sentences.map(s => s.trim()).filter(s => s.length > 0);
+        }
+
+        function convertEmailToHTML1(emailContent) {
             let dataId = 1;
             let htmlOutput = '<div class="email-editor editable-mode" id="emailEditor" contenteditable="true">\n';
 
-            // Split text into top-level paragraphs by \n\n
-            const paragraphs = emailText.trim().split(/\n{2,}/);
+            // Check if input contains HTML tags (formatted content)
+            const containsHTML = /<[^>]+>/.test(emailContent);
 
-            paragraphs.forEach((paragraph, index) => {
-                // Check if this is a list-type paragraph (contains numbered lines like 1., 2., 3.)
-                const lines = paragraph.split('\n').map(line => line.trim()).filter(line => line);
+            if (containsHTML) {
+                // Handle HTML content - preserve formatting
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = emailContent;
 
-                const isNumberedList = lines.length > 1 && lines.every(line => /^\d+\./.test(line));
+                // Get all paragraph-like elements and list elements
+                const elements = tempDiv.querySelectorAll('p, div, br, ol, ul, li');
 
-                if (isNumberedList) {
-                    lines.forEach(line => {
-                        htmlOutput += '    <div class="paragraph">\n';
-                        const parts = line.match(/(\d+\.)|[^.!?]+[.!?]+|[^.!?]+$/g) || [line];
-                        parts.forEach(part => {
+                if (elements.length === 0) {
+                    // No block elements, treat as single paragraph
+                    const content = tempDiv.innerHTML || emailContent;
+                    htmlOutput += '    <div class="paragraph">\n';
+                    htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${content}</span>\n`;
+                    htmlOutput += '    </div>\n';
+                    htmlOutput += '    <div class="add-line-container">\n';
+                    htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                    htmlOutput += '    </div>\n';
+                } else {
+                    // Process each paragraph element and list
+                    const allElements = tempDiv.querySelectorAll('p, div, ol, ul, li');
+                    const paragraphs = tempDiv.querySelectorAll('p, div');
+
+                    if (paragraphs.length === 0 && allElements.length === 0) {
+                        // Handle content with just <br> tags
+                        const parts = tempDiv.innerHTML.split(/<br\s*\/?>/i);
+                        parts.forEach((part, index) => {
                             const trimmed = part.trim();
                             if (trimmed.length > 0) {
+                                // Check if it's a numbered list item
+                                const isNumberedList = /^\d+\./.test(tempDiv.createElement('div').innerHTML = trimmed, tempDiv.textContent);
+
+                                htmlOutput += '    <div class="paragraph">\n';
                                 htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmed}</span>\n`;
+                                htmlOutput += '    </div>\n';
+                                htmlOutput += '    <div class="add-line-container">\n';
+                                htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                                htmlOutput += '    </div>\n';
                             }
                         });
-                        htmlOutput += '    </div>\n';
-                        htmlOutput += '    <div class="add-line-container">\n';
-                        htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
-                        htmlOutput += '    </div>\n';
-                    });
-                } else {
-                    // For last paragraph: convert internal \n to <br>
-                    if (index === paragraphs.length - 1) {
-                        // Escape HTML special chars just in case, then replace \n with <br>
-                        const escapedText = paragraph
-                            .replace(/&/g, "&amp;")
-                            .replace(/</g, "&lt;")
-                            .replace(/>/g, "&gt;");
-
-                        const withBr = escapedText.replace(/\n/g, '<br>');
-                        htmlOutput += '    <div class="paragraph">\n';
-                        htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${withBr}</span>\n`;
-                        htmlOutput += '    </div>\n';
-                        htmlOutput += '    <div class="add-line-container">\n';
-                        htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
-                        htmlOutput += '    </div>\n';
                     } else {
+                        // Process elements while preserving list structures
+                        let processedElements = new Set();
+                        
+                        allElements.forEach((element, index) => {
+                            if (processedElements.has(element)) return;
+                            
+                            const tagName = element.tagName.toLowerCase();
+                            
+                            if (tagName === 'ol' || tagName === 'ul') {
+                                // Handle ordered and unordered lists
+                                processedElements.add(element);
+                                const listItems = element.querySelectorAll('li');
+                                
+                                listItems.forEach(li => {
+                                    processedElements.add(li);
+                                    const liHTML = li.innerHTML;
+                                    htmlOutput += '    <div class="paragraph">\n';
+                                    htmlOutput += `        <span class="ai-sentence list-item" data-list-type="${tagName}" data-id="${dataId++}" onclick="convertToSmartBox(this)">${liHTML}</span>\n`;
+                                    htmlOutput += '    </div>\n';
+                                    htmlOutput += '    <div class="add-line-container">\n';
+                                    htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                                    htmlOutput += '    </div>\n';
+                                });
+                            } else if (tagName === 'li' && !processedElements.has(element)) {
+                                // Handle standalone list items
+                                processedElements.add(element);
+                                const liHTML = element.innerHTML;
+                                const parentList = element.closest('ol, ul');
+                                const listType = parentList ? parentList.tagName.toLowerCase() : 'ul';
+                                
+                                htmlOutput += '    <div class="paragraph">\n';
+                                htmlOutput += `        <span class="ai-sentence list-item" data-list-type="${listType}" data-id="${dataId++}" onclick="convertToSmartBox(this)">${liHTML}</span>\n`;
+                                htmlOutput += '    </div>\n';
+                                htmlOutput += '    <div class="add-line-container">\n';
+                                htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                                htmlOutput += '    </div>\n';
+                            } else if (tagName === 'p' || tagName === 'div') {
+                                // Handle regular paragraphs and divs
+                                processedElements.add(element);
+                                const paraHTML = element.innerHTML;
+                                const paraText = element.textContent.trim();
 
-                        // Treat entire paragraph as one sentence/line (even if it has multiple sentences)
-                        const trimmedParagraph = paragraph.trim();
-                        if (trimmedParagraph.length > 0) {
+                                if (paraText.length === 0) return;
+
+                                // Check if this is a numbered list item (fallback for manually typed lists)
+                                const isNumberedList = /^\d+\./.test(paraText);
+
+                                if (isNumberedList) {
+                                    // For numbered lists, preserve as single sentence with formatting
+                                    htmlOutput += '    <div class="paragraph">\n';
+                                    htmlOutput += `        <span class="ai-sentence list-item" data-list-type="ol" data-id="${dataId++}" onclick="convertToSmartBox(this)">${paraHTML}</span>\n`;
+                                    htmlOutput += '    </div>\n';
+                                } else {
+                                    // For regular paragraphs, keep entire paragraph as one sentence to preserve formatting
+                                    htmlOutput += '    <div class="paragraph">\n';
+                                    htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${paraHTML}</span>\n`;
+                                    htmlOutput += '    </div>\n';
+                                }
+                                htmlOutput += '    <div class="add-line-container">\n';
+                                htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                                htmlOutput += '    </div>\n';
+                            }
+                        });
+                    }
+                }
+            } else {
+                // Handle plain text content (original logic)
+                const paragraphs = emailContent.trim().split(/\n{2,}/);
+
+                paragraphs.forEach((paragraph, index) => {
+                    // Check if this is a list-type paragraph (contains numbered lines like 1., 2., 3.)
+                    const lines = paragraph.split('\n').map(line => line.trim()).filter(line => line);
+                    const isNumberedList = lines.length > 1 && lines.every(line => /^\d+\./.test(line));
+
+                    if (isNumberedList) {
+                        lines.forEach(line => {
                             htmlOutput += '    <div class="paragraph">\n';
-                            htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmedParagraph}</span>\n`;
+                            const parts = line.match(/(\d+\.)|[^.!?]+[.!?]+|[^.!?]+$/g) || [line];
+                            parts.forEach(part => {
+                                const trimmed = part.trim();
+                                if (trimmed.length > 0) {
+                                    htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmed}</span>\n`;
+                                }
+                            });
                             htmlOutput += '    </div>\n';
                             htmlOutput += '    <div class="add-line-container">\n';
                             htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
                             htmlOutput += '    </div>\n';
+                        });
+                    } else {
+                        // For last paragraph: convert internal \n to <br>
+                        if (index === paragraphs.length - 1) {
+                            // Don't escape HTML if it's already formatted content
+                            const withBr = paragraph.replace(/\n/g, '<br>');
+                            htmlOutput += '    <div class="paragraph">\n';
+                            htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${withBr}</span>\n`;
+                            htmlOutput += '    </div>\n';
+                            htmlOutput += '    <div class="add-line-container">\n';
+                            htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                            htmlOutput += '    </div>\n';
+                        } else {
+                            // Treat entire paragraph as one sentence/line (even if it has multiple sentences)
+                            const trimmedParagraph = paragraph.trim();
+                            if (trimmedParagraph.length > 0) {
+                                htmlOutput += '    <div class="paragraph">\n';
+                                htmlOutput += `        <span class="ai-sentence" data-id="${dataId++}" onclick="convertToSmartBox(this)">${trimmedParagraph}</span>\n`;
+                                htmlOutput += '    </div>\n';
+                                htmlOutput += '    <div class="add-line-container">\n';
+                                htmlOutput += '        <button class="add-line-btn" onclick="addNewLine(this)">+</button>\n';
+                                htmlOutput += '    </div>\n';
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
 
             htmlOutput += '</div>';
             return htmlOutput;
@@ -6500,78 +6434,74 @@
         // }
 
         function convertHTMLToEmail(htmlElement) {
-            let emailText = '';
             const paragraphs = [...htmlElement.querySelectorAll('.paragraph')];
+            console.log("Found paragraphs:", paragraphs.length);
+
+            let emailHTML = '';
+            let currentList = null;
+            let currentListType = null;
 
             for (let i = 0; i < paragraphs.length; i++) {
                 const paragraph = paragraphs[i];
-
-                // Special handling for last paragraph
-                if (i === paragraphs.length - 1) {
-                    // Clone to avoid messing with original DOM
-                    const clone = paragraph.cloneNode(true);
-
-                    // Replace all <br> tags with newline characters
-                    clone.querySelectorAll('br').forEach(br => {
-                        const newlineTextNode = document.createTextNode('\n');
-                        br.replaceWith(newlineTextNode);
-                    });
-
-                    // Get the textContent including the replaced newlines
-                    let paragraphText = clone.textContent;
-
-                    // Trim and append
-                    paragraphText = paragraphText.trim();
-
-                    emailText += paragraphText + '\n'; // keep two newlines after last paragraph for spacing
-                    continue;
-                }
-
-                // For other paragraphs, join spans with space as before
                 const spans = [...paragraph.querySelectorAll('.ai-sentence')];
-                let paragraphText = spans.map(span => span.textContent.trim()).join(' ');
 
-                // Append paragraph text
-                emailText += paragraphText;
+                for (const span of spans) {
+                    const spanHTML = span.innerHTML.trim();
+                    const isListItem = span.classList.contains('list-item');
+                    const listType = span.getAttribute('data-list-type');
 
-                // Check if this and next paragraph are numbered list items (start with 1., 2., 3., etc.)
-                const isCurrentListItem = /^\d+\./.test(paragraphText);
-                const nextParagraph = paragraphs[i + 1];
-                const isNextListItem = nextParagraph && /^\d+\./.test(nextParagraph.textContent.trim());
+                    if (isListItem && listType) {
+                        // Handle list items
+                        if (currentList === null || currentListType !== listType) {
+                            // Close previous list if different type
+                            if (currentList !== null) {
+                                emailHTML += currentListType === 'ol' ? '</ol>' : '</ul>';
+                            }
+                            // Start new list
+                            currentList = [];
+                            currentListType = listType;
+                            emailHTML += listType === 'ol' ? '<ol>' : '<ul>';
+                        }
+                        // Add list item
+                        emailHTML += `<li>${spanHTML}</li>`;
+                    } else {
+                        // Handle regular content
+                        if (currentList !== null) {
+                            // Close any open list
+                            emailHTML += currentListType === 'ol' ? '</ol>' : '</ul>';
+                            currentList = null;
+                            currentListType = null;
+                        }
+                        
+                        // Collect all non-list spans in this paragraph
+                        let paragraphHTML = spans
+                            .filter(s => !s.classList.contains('list-item'))
+                            .map(s => s.innerHTML.trim())
+                            .join(' ');
 
-                if (isCurrentListItem && isNextListItem) {
-                    // Between consecutive numbered list items -> add single newline
-                    emailText += '\n';
-                } else {
-                    // Else add two newlines to separate paragraphs
-                    emailText += '\n\n';
+                        console.log(`Paragraph ${i + 1} HTML:`, paragraphHTML);
+
+                        // Wrap in paragraph tag for Froala
+                        if (paragraphHTML.trim()) {
+                            emailHTML += `<p style="margin-bottom: 16px;">${paragraphHTML}</p>`;
+                        }
+                        break; // Move to next paragraph after processing all non-list spans
+                    }
                 }
             }
 
-            // Trim extra trailing whitespace/newlines
-            emailText = emailText.trim();
-            return emailText;
+            // Close any remaining open list
+            if (currentList !== null) {
+                emailHTML += currentListType === 'ol' ? '</ol>' : '</ul>';
+            }
+
+            console.log("Final reconstructed email HTML:", emailHTML);
+            return emailHTML;
         }
 
         function sendReply() {
             alert('Reply Sent Successfully!!');
             console.log('Reply Sent Successfully!!');
-        }
-
-        function regenerateInline() {
-            document.querySelectorAll('.inline-response').forEach(el => {
-                const id = el.dataset.id;
-                const alts = inlineAlternatives[id];
-                if (alts) {
-                    const currentText = el.textContent;
-                    const newText = alts.find(alt => alt.replace(/<br>/g, '\n') !== currentText) || alts[0];
-                    el.innerHTML = newText;
-                    el.classList.add('regenerating');
-                    setTimeout(() => {
-                        el.classList.remove('regenerating');
-                    }, 500);
-                }
-            });
         }
 
         function closeDraft() {
@@ -7050,8 +6980,10 @@
         let selectedQueueItems = new Set();
 
         async function addToAIQueue(item) {
-            if (!item.id) {
-                item.id = Date.now() + Math.random();
+            // Don't generate client-side ID - let the database handle it
+            // Remove any client-generated ID to avoid conflicts
+            if (item.id && typeof item.id === 'number' && item.id.toString().includes('.')) {
+                delete item.id;
             }
 
             item.timestamp = item.timestamp || new Date().toISOString();
@@ -7190,6 +7122,8 @@
             element.classList.add('active');
 
             if (filterLabel.includes('status')) {
+                console.log(filterValue, 'filterValue---------------');
+
                 aiQueueFilters.status = filterValue;
             } else if (filterLabel.includes('type')) {
                 aiQueueFilters.type = filterValue;
@@ -7200,16 +7134,230 @@
             renderAIQueue();
         }
 
+
+        function deleteAllAIQueue() {
+            if (confirm('Are you sure you want to clear all items from the queue? \n\n This action cannot be undone.')) {
+                fetch(API_BASE_URL + '/ai/queue/clear-all', {
+                    method: 'DELETE',
+                    credentials: 'include'
+                }).then(response => response.json()).then(data => {
+                    if (data.success) {
+                        alert('All items cleared from queue');
+                        aiQueue = [];
+                        renderAIQueue();
+                    } else {
+                        alert('Failed to clear all items from queue');
+                    }
+                });
+            }
+        }
+
         function sendAIReply(itemId) {
             const item = aiQueue.find(i => i.id == itemId);
             if (item) {
                 alert(`Email "${item.subject || 'AI Generated Email'}" sent successfully!`);
                 dismissAIReply(itemId);
+
+                fetch(API_BASE_URL + '/ai/queue/send/' + itemId, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+            }
+        }
+
+        function refreshEditorContent(updatedItem) {
+            // Function to refresh editor content after API update
+            try {
+                const newContent = updatedItem.content || '';
+                console.log('=== REFRESH EDITOR DEBUG ===');
+                console.log('New content to display:', newContent);
+                console.log('Updated item:', updatedItem);
+
+                // Determine which editor mode is active
+                const aiModeToggle = document.getElementById('aiModeToggle');
+                const aiInlineModeToggle = document.getElementById('aiInlineModeToggle');
+                const isAIMode = aiModeToggle && aiModeToggle.checked;
+                const isAIInlineMode = aiInlineModeToggle && aiInlineModeToggle.checked;
+
+                console.log('Editor modes - AI:', isAIMode, 'AI Inline:', isAIInlineMode);
+
+                // Try to update all possible editors to ensure content is refreshed
+                let updated = false;
+
+                // Update AI inline editor if available
+                const aiInlineEditor = document.getElementById('emailEditor');
+                if (aiInlineEditor) {
+                    console.log('Found AI inline editor, updating...');
+                    try {
+                        // Use the existing conversion function to maintain proper formatting
+                        const htmlContent = convertEmailToHTML(newContent);
+
+                        // Extract just the inner content (without the outer wrapper)
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = htmlContent;
+                        const emailEditorDiv = tempDiv.querySelector('.email-editor');
+
+                        if (emailEditorDiv) {
+                            const innerContent = emailEditorDiv.innerHTML;
+                            aiInlineEditor.innerHTML = innerContent;
+                            console.log('✅ AI inline editor updated successfully');
+                            updated = true;
+                        }
+                    } catch (err) {
+                        console.error('Error updating AI inline editor:', err);
+                        // Fallback to simple update
+                        aiInlineEditor.innerHTML = `<div class="paragraph" contenteditable="true">${newContent.replace(/\n\n/g, '</div><div class="paragraph" contenteditable="true">').replace(/\n/g, '<br>')}</div>`;
+                        updated = true;
+                    }
+                }
+
+                // Update Froala editor if available
+                if (window.editorInstance) {
+                    console.log('Found Froala editor instance, updating...');
+                    try {
+                        // Use convertEmailToHTML1 for Froala editor formatting
+                        const htmlContent = convertEmailToHTML1(newContent);
+
+                        // Extract content for Froala
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = htmlContent;
+                        const emailEditorDiv = tempDiv.querySelector('.email-editor');
+
+                        if (emailEditorDiv) {
+                            const innerContent = emailEditorDiv.innerHTML;
+
+                            // More aggressive approach: destroy and recreate editor content
+                            try {
+                                // Save current editor state
+                                const editorElement = window.editorInstance.$el[0];
+                                const editorParent = editorElement.parentNode;
+
+                                // Destroy current editor
+                                window.editorInstance.destroy();
+
+                                // Create new element with updated content
+                                const newEditorElement = document.createElement('div');
+                                newEditorElement.innerHTML = innerContent;
+                                newEditorElement.id = 'draftContent';
+
+                                // Replace in DOM
+                                editorParent.replaceChild(newEditorElement, editorElement);
+
+                                // Reinitialize Froala
+                                window.editorInstance = new FroalaEditor('#draftContent', {
+                                    heightMin: 300,
+                                    placeholderText: 'Start typing your email...',
+                                    toolbarButtons: ['bold', 'italic', 'underline', '|', 'paragraphFormat', 'align', '|', 'insertLink', 'insertTable', '|', 'undo', 'redo'],
+                                    quickInsertButtons: ['table', 'ul', 'ol', 'hr'],
+                                    charCounterCount: false
+                                });
+
+                                console.log('✅ Froala editor destroyed and recreated with new content');
+                                updated = true;
+                            } catch (destroyError) {
+                                console.log('Editor destroy/recreate failed, using standard update:', destroyError);
+
+                                // Fallback to standard update
+                                window.editorInstance.html.set('');
+                                window.editorInstance.html.set(innerContent);
+                                window.editorInstance.events.trigger('contentChanged');
+
+                                console.log('✅ Froala editor updated with standard method');
+                                updated = true;
+                            }
+
+                            // Verify content was actually set
+                            setTimeout(() => {
+                                try {
+                                    const currentContent = window.editorInstance.html.get();
+                                    console.log('Verification - Current Froala content:', currentContent.substring(0, 100) + '...');
+                                    console.log('Content contains updated text:', currentContent.includes('and it\'s not i guess') || currentContent.includes('Hoping to be good!'));
+                                } catch (verifyError) {
+                                    console.log('Content verification failed:', verifyError);
+                                }
+                            }, 200);
+                        }
+                    } catch (err) {
+                        console.error('Error updating Froala editor:', err);
+                        // Fallback to simple HTML
+                        const simpleContent = newContent.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+                        window.editorInstance.html.set('');
+                        window.editorInstance.html.set(`<p>${simpleContent}</p>`);
+                        window.editorInstance.events.trigger('contentChanged');
+                        updated = true;
+                    }
+                }
+
+                // Update draft content element in Froala wrapper if available
+                const froalaWrapper = document.querySelector("#draftContent > div.fr-wrapper > div");
+                if (froalaWrapper) {
+                    console.log('Found Froala wrapper, updating...');
+                    try {
+                        // For Froala, update the wrapper content
+                        const htmlContent = convertEmailToHTML1(newContent);
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = htmlContent;
+                        const emailEditorDiv = tempDiv.querySelector('.email-editor');
+
+                        if (emailEditorDiv) {
+                            const innerContent = emailEditorDiv.innerHTML;
+
+                            // Clear existing content first
+                            froalaWrapper.innerHTML = '';
+
+                            // Force reflow
+                            froalaWrapper.offsetHeight;
+
+                            // Set new content
+                            froalaWrapper.innerHTML = innerContent;
+
+                            console.log('✅ Froala wrapper updated successfully');
+                            console.log('Wrapper content set to:', innerContent.substring(0, 100) + '...');
+                            updated = true;
+                        }
+                    } catch (err) {
+                        console.error('Error updating Froala wrapper:', err);
+                        // Fallback to simple content
+                        const simpleContent = newContent.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+                        froalaWrapper.innerHTML = '';
+                        froalaWrapper.offsetHeight; // Force reflow
+                        froalaWrapper.innerHTML = `<p>${simpleContent}</p>`;
+                        updated = true;
+                    }
+                }
+
+                // Fallback: Update draft content textarea if available
+                const draftContentElement = document.getElementById('draftContent');
+                if (draftContentElement && draftContentElement.tagName === 'TEXTAREA') {
+                    draftContentElement.value = newContent;
+                    console.log('✅ Draft textarea updated');
+                    updated = true;
+                }
+
+                if (!updated) {
+                    console.warn('⚠️ No editor found to update!');
+                } else {
+                    console.log('✅ Editor content refresh completed');
+                }
+
+            } catch (error) {
+                console.error('❌ Critical error refreshing editor content:', error);
+                // Emergency fallback
+                const aiInlineEditor = document.getElementById('emailEditor');
+                if (aiInlineEditor) {
+                    aiInlineEditor.innerHTML = `<div class="paragraph" contenteditable="true">${(updatedItem.content || '').replace(/\n/g, '<br>')}</div>`;
+                    console.log('🚨 Emergency fallback applied');
+                }
             }
         }
 
         function editAIReply(itemId) {
+            console.log(itemId, 'AISA KI ITEM ID----->');
             const item = aiQueue.find(i => i.id == itemId);
+            console.log(item, 'AISA KI ITEM----->');
             if (item) {
                 console.log(item, 'ALIS KYA HAI SUNAAAA');
 
@@ -7282,7 +7430,7 @@
                             const htmlContent = draftContent
                                 .split('\n\n')
                                 .filter(para => para.trim())
-                                .map(para => `<p style="margin-bottom: 16px;">${para.replace(/\n/g, '<br>')}</p>`)
+                                .map(para => para.replace(/\n/g, '<br>'))
                                 .join('');
 
                             window.editorInstance.html.set(htmlContent);
@@ -7327,11 +7475,32 @@
             }
         }
 
-        function dismissAIReply(itemId) {
-            aiQueue = aiQueue.filter(item => item.id != itemId);
-            selectedQueueItems.delete(itemId);
-            updateAIQueueCount();
-            renderAIQueue();
+        // TODO: Dismis with API
+        function dismissAIReply(itemId, isDelete = false) {
+            if (isDelete) {
+                try {
+                    fetch(API_BASE_URL + '/ai/queue/' + itemId, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        credentials: 'include'
+                    });
+                    alert('Email dismissed successfully!');
+                    aiQueue = aiQueue.filter(item => item.id != itemId);
+                    selectedQueueItems.delete(itemId);
+                    updateAIQueueCount();
+                    renderAIQueue();
+                } catch (error) {
+                    console.error('AI Queue Delete Error:', error);
+                    alert('Failed to dismiss email from AI Queue');
+                }
+            } else {
+                aiQueue = aiQueue.filter(item => item.id != itemId);
+                selectedQueueItems.delete(itemId);
+                updateAIQueueCount();
+                renderAIQueue();
+            }
         }
 
         function toggleQueueItemSelection(itemId, checkbox) {
@@ -7424,19 +7593,21 @@
         };
 
         // Enhanced email send function to add to queue
-        const originalSendEmail = window.sendEmail;
-        window.sendEmail = function () {
+        const originalSendEmail = window.saveToAIQueue;
+        window.saveToAIQueue = function () {
             // const currentContent = getCurrentEditorContent();
             const aiModeToggle = document.getElementById('aiModeToggle')
             const aiInlineModeToggle = document.getElementById('aiInlineModeToggle')
 
+            let contentHtml = '';
             let currentContent = ''
             if (aiInlineModeToggle.checked || aiModeToggle.checked) {
                 const htmlElement = document.getElementById('emailEditor');
-
+                contentHtml = htmlElement.innerHTML;
                 currentContent = convertHTMLToEmail(htmlElement)
             } else {
                 currentContent = getCurrentEditorContent()
+                contentHtml = convertEmailToHTML1(currentContent)
             }
 
             const promptElement = document.getElementById('composePrompt');
@@ -7450,26 +7621,125 @@
             }
 
             if (window.editingQueueItem) {
-                // When editing an existing queue item, send it directly instead of updating the queue
+                const sendEmailBtn = document.querySelector('#sendEmailBtn');
+                sendEmailBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                sendEmailBtn.disabled = true;
+
+                // When editing an existing queue item, update it via API
                 const item = aiQueue.find(item => item.id == window.editingQueueItem);
                 if (item) {
-                    // Update the item with the current content
-                    item.aiResponse = currentContent;
-                    item.content = currentContent;
+                    console.log('Updating queue item:', window.editingQueueItem);
 
-                    // Send the email (same logic as sendAIReply)
-                    alert(`Email "${item.subject || 'AI Generated Email'}" sent successfully!`);
+                    // Prepare update data
+                    const updateData = {
+                        id: window.editingQueueItem,
+                        content: currentContent,
+                        contentHtml: contentHtml,
+                        tone: tone,
+                        status: 'ready' // Mark as ready after editing
+                    };
 
-                    // Remove from queue
-                    aiQueue = aiQueue.filter(queueItem => queueItem.id != window.editingQueueItem);
-                    selectedQueueItems.delete(window.editingQueueItem);
-                    updateAIQueueCount();
-                    renderAIQueue();
+                    // Get subject from the current draft if available
+                    if (emailDraftData && emailDraftData.draft && emailDraftData.draft.subject) {
+                        updateData.subject = emailDraftData.draft.subject;
+                    }
+
+                    // Add metadata with edit information
+                    updateData.metadata = {
+                        ...item.metadata,
+                        lastEdited: new Date().toISOString(),
+                        editedBy: 'user',
+                        originalPrompt: prompt,
+                        status: 'ready'
+                    };
+
+                    // Call the update API
+                    fetch('/api/ai/queue/update', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updateData)
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            sendEmailBtn.innerHTML = sendEmailBtn.innerHTML = '<i class="fas fa-save"></i> Save';
+                            sendEmailBtn.disabled = false;
+
+                            if (data.success) {
+                                console.log('Queue item updated successfully:', data.item);
+
+                                // Update the local queue item with the response data
+                                const updatedItem = data.item;
+                                const queueIndex = aiQueue.findIndex(q => q.id == data.item.id);
+                                if (queueIndex !== -1) {
+                                    // Map database fields to frontend fields and merge
+                                    aiQueue[queueIndex] = {
+                                        ...aiQueue[queueIndex],
+                                        // Database fields
+                                        id: updatedItem.id,
+                                        type: updatedItem.type,
+                                        subject: updatedItem.subject,
+                                        content: updatedItem.content,
+                                        contentHtml: updatedItem.content_html, // Map database field
+                                        tone: updatedItem.tone,
+                                        status: updatedItem.status,
+                                        timestamp: updatedItem.timestamp || updatedItem.updated_at,
+                                        metadata: updatedItem.metadata,
+                                        // Frontend compatibility fields
+                                        aiResponse: updatedItem.content, // Maintain compatibility
+                                        originalPrompt: updatedItem.metadata?.originalPrompt || '',
+                                        // Preserve original email data if it exists
+                                        originalEmail: aiQueue[queueIndex].originalEmail,
+                                        replyTo: aiQueue[queueIndex].replyTo,
+                                        selected: aiQueue[queueIndex].selected || false
+                                    };
+
+                                    console.log('Updated queue item:', aiQueue[queueIndex]);
+                                    console.log('Full aiQueue after update:', aiQueue);
+                                } else {
+                                    console.error('Could not find queue item with ID:', data.item.id);
+                                }
+
+                                renderAIQueue();
+
+                                // Show success message
+                                alert(`Email "${updatedItem.subject || 'AI Generated Email'}" saved successfully!`);
+
+                                // Close current modal
+                                closeComposeModal();
+
+                                // Wait a moment then reopen with updated content
+                                setTimeout(() => {
+                                    // Find the updated item in the queue
+                                    const refreshedItem = aiQueue.find(item => item.id == window.editingQueueItem);
+                                    if (refreshedItem) {
+                                        console.log('Reopening modal with updated item:', refreshedItem);
+
+                                        // Store the editing item ID for the reopen
+                                        const editingItemId = window.editingQueueItem;
+
+                                        // Clear the editing state temporarily
+                                        delete window.editingQueueItem;
+
+                                        // Reopen the edit modal
+                                        editAIReply(editingItemId);
+                                    } else {
+                                        console.error('Could not find updated item to reopen');
+                                    }
+                                }, 500);
+                            } else {
+                                console.error('Failed to update queue item:', data.error);
+                                alert(`Failed to update email: ${data.error}`);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error updating queue item:', error);
+                            alert('Error updating email. Please try again.');
+                        });
                 }
                 delete window.editingQueueItem;
 
-                // Close modal after sending
-                closeComposeModal();
                 return;
             } else {
                 // Determine if this is a reply or compose based on modal title and context
@@ -7492,9 +7762,10 @@
                     subject: subject,
                     aiResponse: currentContent,
                     content: currentContent,
+                    contentHtml: contentHtml,
                     originalPrompt: prompt,
                     tone: tone,
-                    status: 'ready'
+                    status: 'review'
                 };
 
                 // If it's a reply, include the original email context
@@ -7505,41 +7776,50 @@
                 addToAIQueue(queueItem);
             }
 
-            alert('Email added to AI Queue for review!');
+            alert('Email saved to AI Queue for review!');
             closeComposeModal();
         };
 
-        document.addEventListener('DOMContentLoaded', async function () {
+        // Function to load the AI Queue
+        async function loadAIQueue() {
+            aiQueue = [];
             updateAIQueueCount();
 
             const aiQueueRespose = await fetch(API_BASE_URL + '/ai/queue');
             const aiQueueResult = await aiQueueRespose.json();
-            setTimeout(() => {
-                // aiQueue.push(aiQueueResult);
-            }, 1000);
-            // setTimeout(() => {
-            //     addToAIQueue({
-            //         type: 'compose',
-            //         subject: 'Welcome New Members',
-            //         aiResponse: 'Dear Fellow Patriots,\n\nWe are excited to welcome our newest members to the NRA family. Your commitment to defending our Second Amendment rights strengthens our cause...',
-            //         originalPrompt: 'Welcome message for new members',
-            //         tone: 'professional',
-            //         status: 'ready',
-            //         timestamp: new Date(Date.now() - 3600000).toISOString() // 1 hour ago
-            //     });
 
-            //     addToAIQueue({
-            //         type: 'reply',
-            //         subject: 'Re: Concerns about recent legislation',
-            //         originalEmail: {
-            //             from: 'member@example.com',
-            //             subject: 'Concerns about recent legislation'
-            //         },
-            //         aiResponse: 'Thank you for reaching out about your concerns regarding the recent legislation. We share your worries and are actively working...',
-            //         status: 'needs-review',
-            //         timestamp: new Date(Date.now() - 1800000).toISOString()
-            //     });
-            // }, 1000);
+            const modifiedQueue = aiQueueResult.queue.map(item => {
+                const replyTo = JSON.parse(item?.original_email)?.to || '';
+                const modifiedItem = {
+                    id: item.id,
+                    type: item.type,
+                    subject: item.subject,
+                    aiResponse: item.content,
+                    content: item.content,
+                    originalPrompt: item?.originalPrompt,
+                    tone: item.tone,
+                    status: item.status,
+                    timestamp: item.timestamp,
+                    selected: false,
+                    replyTo: replyTo.toString(),
+                    originalEmail: item.original_email ? JSON.parse(item.original_email) : null
+                }
+                return modifiedItem
+            })
+
+            modifiedQueue.forEach(item => {
+                aiQueue.push(item);
+            });
+            updateAIQueueCount();
+
+            if (document.getElementById('ai-queueView').style.display !== 'none') {
+                renderAIQueue();
+            }
+        }
+
+        // Load the AI Queue when the page loads
+        document.addEventListener('DOMContentLoaded', async function () {
+            loadAIQueue();
         });
     </script>
 </body>

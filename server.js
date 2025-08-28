@@ -920,7 +920,7 @@ app.post('/api/ai/reply', requireAuth, async (req, res) => {
         };
 
         // const systemPrompt = `You are Bill Bachenberg, President of the NRA, responding to member communications. 
-        
+
         // Create a professional, ${tone} email reply that:
         // - Addresses the sender by their name: ${emailContext.senderName}
         // - Acknowledges their specific concerns or points raised
@@ -929,7 +929,7 @@ app.post('/api/ai/reply', requireAuth, async (req, res) => {
         // - Shows appreciation for their membership and feedback
         // - Includes appropriate professional closing
         // - Is suitable for NRA leadership communication
-        
+
         // Original Email Details:
         // - From: ${emailContext.senderName} (${emailContext.sender})
         // - Subject: ${emailContext.subject}
@@ -937,11 +937,11 @@ app.post('/api/ai/reply', requireAuth, async (req, res) => {
         // - Priority Level: ${emailContext.priority || 'standard'}
         // - Key Issues: ${emailContext.issues.length > 0 ? emailContext.issues.join(', ') : 'general communication'}
         // - Summary: ${emailContext.summary || 'Member communication'}
-        
+
         // Email Content Preview: ${emailContext.content ? emailContext.content.substring(0, 400) + '...' : 'Content not available'}
-        
+
         // Generate a complete, professional email reply that directly addresses their message.
-        
+
         // Return the output in the following JSON format:
         // {
         // "subject": <string, the subject of the reply>,
@@ -1128,6 +1128,7 @@ app.post('/api/ai/compose', async (req, res) => {
                                 - Ensure all content meets standards for professionalism and appropriateness for leadership and organizational communication.
                                 - Respect the user's requested tone (${tone}); fallback to "professional" if the input is missing or malformed.
                                 - If information for any required output field is not provided, leave that field blank using the placeholder format [Your Field Name], e.g., [Your Name].
+                                - Automatically recognize and correct spelling mistakes in the email content before generating the output.
 
                                 # Output Format
                                 - Your response must be a valid JSON object containing these fields in the specified order:
@@ -1212,7 +1213,8 @@ app.get('/api/ai/queue', requireAuth, async (req, res) => {
         const selectQuery = `
         SELECT 
             id, type, content, original_email, metadata, status, 
-            timestamp, user_id, priority, created_at, updated_at
+            timestamp, user_id, priority, created_at, updated_at,
+            tone, content_html, subject
         FROM ai_queue
         WHERE ${whereConditions.join(' AND ')}
         ORDER BY timestamp DESC
@@ -1237,7 +1239,8 @@ app.get('/api/ai/queue', requireAuth, async (req, res) => {
 
 app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
     try {
-        const { type, content, originalEmail, metadata } = req.body;
+
+        const { type, content, originalEmail, metadata, tone, contentHtml, subject, status } = req.body;
         // TODO:
         // 1. Save the queue item to the database
         const queueItem = {
@@ -1252,10 +1255,13 @@ app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
         };
 
         const insertQuery = `
-        INSERT INTO ai_queue (type, content, original_email, metadata, timestamp, user_id)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO ai_queue (type, content, original_email, metadata, timestamp, user_id, tone, content_html, subject, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *
     `;
+
+        console.log({ type, content, originalEmail, metadata, tone, contentHtml, subject, status }, ';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;');
+
 
         const result = await query(insertQuery, [
             type,
@@ -1263,7 +1269,11 @@ app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
             originalEmail || null,
             JSON.stringify(metadata || {}),
             new Date().toISOString(),
-            req.session.username
+            req.session.username,
+            tone,
+            contentHtml,
+            subject,
+            status
         ]);
 
         // TODO:
@@ -1271,7 +1281,7 @@ app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
 
         res.json({
             success: true,
-            item: queueItem
+            item: result.rows[0]
         });
 
     } catch (error) {
@@ -1283,14 +1293,228 @@ app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
     }
 });
 
-app.post('/api/ai/queue/send/:id', requireAuth, async (req, res) => {
+// AI Queue Update API
+app.post('/api/ai/queue/update', requireAuth, async (req, res) => {
+    try {
+        const { id, status, content, contentHtml, subject, tone, metadata, priority, type, lastEdited } = req.body;
+        const userId = req.session.username;
+
+        // Validate required fields
+        if (!id || !userId) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Missing required fields' 
+            });
+        }
+
+        // Validate ID format - must be a valid integer
+        const numericId = parseInt(id, 10);
+        if (isNaN(numericId) || numericId.toString() !== id.toString()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid ID format. ID must be a valid integer.'
+            });
+        }
+
+        // Validate status if provided
+        const validStatuses = ['ready', 'draft', 'pending', 'sent', 'failed', 'cancelled', 'review'];
+        if (status && !validStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+            });
+        }
+
+        // Validate priority if provided
+        if (priority !== undefined && (priority < 1 || priority > 5 || !Number.isInteger(priority))) {
+            return res.status(400).json({
+                success: false,
+                error: 'Priority must be an integer between 1 and 5'
+            });
+        }
+
+        // Check if queue item exists and belongs to user
+        const checkQuery = `SELECT * FROM ai_queue WHERE id = $1 AND user_id = $2`;
+        const existingResult = await query(checkQuery, [numericId, userId]);
+        
+        if (existingResult.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Queue item not found or you do not have permission to update it' 
+            });
+        }
+
+        const existingItem = existingResult.rows[0];
+
+        // Build dynamic update query based on provided fields
+        const updateFields = [];
+        const updateValues = [];
+        let paramCount = 0;
+
+        if (status !== undefined) {
+            paramCount++;
+            updateFields.push(`status = $${paramCount}`);
+            updateValues.push(status);
+        }
+
+        if (content !== undefined) {
+            paramCount++;
+            updateFields.push(`content = $${paramCount}`);
+            updateValues.push(content);
+        }
+
+        if (contentHtml !== undefined) {
+            paramCount++;
+            updateFields.push(`content_html = $${paramCount}`);
+            updateValues.push(contentHtml);
+        }
+
+        if (subject !== undefined) {
+            paramCount++;
+            updateFields.push(`subject = $${paramCount}`);
+            updateValues.push(subject);
+        }
+
+        if (tone !== undefined) {
+            paramCount++;
+            updateFields.push(`tone = $${paramCount}`);
+            updateValues.push(tone);
+        }
+
+        if (metadata !== undefined) {
+            paramCount++;
+            updateFields.push(`metadata = $${paramCount}`);
+            updateValues.push(JSON.stringify(metadata));
+        }
+
+        if (priority !== undefined) {
+            paramCount++;
+            updateFields.push(`priority = $${paramCount}`);
+            updateValues.push(priority);
+        }
+
+        if (type !== undefined) {
+            paramCount++;
+            updateFields.push(`type = $${paramCount}`);
+            updateValues.push(type);
+        }
+
+        // Always update the updated_at timestamp
+        paramCount++;
+        updateFields.push(`updated_at = $${paramCount}`);
+        updateValues.push(new Date().toISOString());
+
+        // If no fields to update, return early
+        if (updateFields.length === 1) { // Only updated_at was added
+            return res.status(400).json({
+                success: false,
+                error: 'No valid fields provided for update'
+            });
+        }
+
+        // Add WHERE clause parameters
+        updateValues.push(numericId, userId);
+        const whereClause = `WHERE id = $${paramCount + 1} AND user_id = $${paramCount + 2}`;
+
+        const updateQuery = `
+            UPDATE ai_queue 
+            SET ${updateFields.join(', ')} 
+            ${whereClause}
+            RETURNING *
+        `;
+
+        console.log('Updating queue item:', { id: numericId, userId, fields: updateFields });
+
+        const updateResult = await query(updateQuery, updateValues);
+        const updatedItem = updateResult.rows[0];
+
+        // Log the update for audit purposes
+        console.log(`Queue item ${numericId} updated by user ${userId}:`, {
+            previousStatus: existingItem.status,
+            newStatus: updatedItem.status,
+            fieldsUpdated: updateFields.filter(f => !f.includes('updated_at'))
+        });
+
+        res.json({
+            success: true,
+            message: 'Queue item updated successfully',
+            item: {
+                ...updatedItem,
+                metadata: typeof updatedItem.metadata === 'string' 
+                    ? JSON.parse(updatedItem.metadata) 
+                    : updatedItem.metadata
+            }
+        });
+
+    } catch (error) {
+        console.error('AI Queue Update Error:', error);
+        
+        // Handle specific database errors
+        if (error.code === '23505') { // Unique constraint violation
+            return res.status(409).json({
+                success: false,
+                error: 'Update would create a duplicate entry'
+            });
+        }
+        
+        if (error.code === '23503') { // Foreign key constraint violation
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid reference in update data'
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update queue item',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// AI Queue Clear All API
+app.delete('/api/ai/queue/clear-all', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.username;
+        if (userId !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'You are not authorized to clear all items from queue'
+            });
+        }
+
+        const clearQuery = `DELETE FROM ai_queue WHERE user_id = $1`;
+        await query(clearQuery, [userId]);
+
+        res.json({
+            success: true,
+            message: 'All items cleared from queue'
+        });
+    } catch (error) {
+        console.error('AI Queue Clear All Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to clear all items from queue'
+        });
+    }
+});
+
+app.get('/api/ai/queue/send/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
 
         // TODO:
         // 1. Fetch the queue item from database
+        const userId = req.session.username;
+        const selectQuery = `SELECT * FROM ai_queue WHERE id = $1 AND user_id = $2`;
+        const result = await query(selectQuery, [id, userId]);
+        if (result.rows.length === 0) return res.status(404).json({ error: `Queue item not found` });
+        const queueItem = result.rows[0];
+        
         // 2. Send the actual email via email service
         // 3. Remove from queue or mark as sent
+        const changeStatusQuery = `UPDATE ai_queue SET status = 'sent' WHERE id = $1 AND user_id = $2`;
+        await query(changeStatusQuery, [id, userId]);
 
         res.json({
             success: true,
@@ -1311,7 +1535,15 @@ app.delete('/api/ai/queue/:id', requireAuth, async (req, res) => {
         const { id } = req.params;
 
         // TODO:
+        // 1. Check if the queue item exists
+        const userId = req.session.username;
+        const checkQuery = `SELECT * FROM ai_queue WHERE id = $1 AND user_id = $2`;
+        const result = await query(checkQuery, [id, userId]);
+        if (result.rows.length === 0) return res.status(404).json({ error: `Queue item not found` });
+
         // 1. Remove the queue item from the database
+        const deleteQuery = `DELETE FROM ai_queue WHERE id = $1 AND user_id = $2`;
+        await query(deleteQuery, [id, userId]);
 
         res.json({
             success: true,
@@ -1330,10 +1562,10 @@ app.delete('/api/ai/queue/:id', requireAuth, async (req, res) => {
 // AI Sentence Generation API
 app.post('/api/ai/generate-sentence', requireAuth, async (req, res) => {
     try {
-        const { 
+        const {
             action, // 'regenerate', 'expand', 'shorten'
-            currentSentence, 
-            previousContext = '', 
+            currentSentence,
+            previousContext = '',
             currentParagraph = '',
             tone = 'professional',
             emailContext = {}
@@ -1376,7 +1608,7 @@ Tone: ${tone}
                 - Maintains professional email standards
                 
                 Return only the rewritten sentence, no additional text or formatting.`;
-                
+
                 userPrompt = `Rewrite this sentence while maintaining its meaning:\n\n${contextInfo}`;
                 break;
 
@@ -1390,7 +1622,7 @@ Tone: ${tone}
                 - Doesn't change the core meaning
                 
                 Return only the expanded sentence, no additional text or formatting.`;
-                
+
                 userPrompt = `Expand this sentence with relevant additional detail:\n\n${contextInfo}`;
                 break;
 
@@ -1404,7 +1636,7 @@ Tone: ${tone}
                 - Ensuring it still fits the context
                 
                 Return only the shortened sentence, no additional text or formatting.`;
-                
+
                 userPrompt = `Make this sentence more concise while preserving its meaning:\n\n${contextInfo}`;
                 break;
 
