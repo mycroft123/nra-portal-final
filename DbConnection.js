@@ -10,12 +10,30 @@ const dbConfig = {
   
   // Connection pool settings
   max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 2000, // Return error after 2 seconds if connection could not be established
+  idleTimeoutMillis: 300000, // Close idle clients after 5 minutes (300 seconds)
+  connectionTimeoutMillis: 10000, // Return error after 10 seconds if connection could not be established
+  acquireTimeoutMillis: 10000, // Time to wait for connection from pool
+  createTimeoutMillis: 10000, // Time to wait for new connection creation
+  destroyTimeoutMillis: 5000, // Time to wait for connection destruction
+  reapIntervalMillis: 1000, // How often to check for idle connections
+  createRetryIntervalMillis: 200, // Time between connection creation retries
 };
 
 // Create a connection pool
 const pool = new Pool(dbConfig);
+
+// Add connection pool event listeners for better monitoring
+pool.on('connect', (client) => {
+  console.log('🔗 New client connected to database');
+});
+
+pool.on('error', (err, client) => {
+  console.error('❌ Unexpected error on idle client:', err);
+});
+
+pool.on('remove', (client) => {
+  console.log('🗑️ Client removed from pool');
+});
 
 // Database connection function
 async function connectDB() {
@@ -45,17 +63,35 @@ async function closeDB() {
   }
 }
 
-// Database query helper function
-async function query(text, params) {
+// Database query helper function with retry logic
+async function query(text, params, retries = 3) {
   const start = Date.now();
-  try {
-    const result = await pool.query(text, params);
-    const duration = Date.now() - start;
-    console.log('⚡ Query executed', { text, duration, rows: result.rowCount });
-    return result;
-  } catch (error) {
-    console.error('❌ Query error:', error.message);
-    throw error;
+  
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const result = await pool.query(text, params);
+      const duration = Date.now() - start;
+      console.log('⚡ Query executed', { text, duration, rows: result.rowCount, attempt });
+      return result;
+    } catch (error) {
+      console.error(`❌ Query error (attempt ${attempt}/${retries}):`, error.message);
+      
+      // Check if it's a connection-related error that we should retry
+      const isConnectionError = error.message.includes('Connection terminated') ||
+                               error.message.includes('connection timeout') ||
+                               error.message.includes('ECONNRESET') ||
+                               error.message.includes('ENOTFOUND') ||
+                               error.code === 'ECONNRESET' ||
+                               error.code === 'ENOTFOUND';
+      
+      if (isConnectionError && attempt < retries) {
+        console.log(`🔄 Retrying query in ${attempt * 1000}ms...`);
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000)); // Exponential backoff
+        continue;
+      }
+      
+      throw error;
+    }
   }
 }
 

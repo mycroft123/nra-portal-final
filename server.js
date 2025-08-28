@@ -1017,6 +1017,182 @@ app.post('/api/ai/reply', requireAuth, async (req, res) => {
     }
 });
 
+// AI Reply Inline API
+app.post('/api/ai/reply-inline', requireAuth, async (req, res) => {
+    try {
+        const { originalEmail, tone = 'professional' } = req.body;
+
+        if (!originalEmail) {
+            return res.json({ success: false, error: 'Original email data is required' });
+        }
+
+        if (!process.env.OPENAI_API_KEY) {
+            return res.status(500).json({
+                error: 'OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file.'
+            });
+        }
+
+        // Extract sender name from email address
+        function extractNameFromEmail(email) {
+            const username = email.split('@')[0];
+            return username
+                .replace(/[._-]/g, ' ')
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+        }
+
+        // Extract relevant context from the original email
+        const emailContext = {
+            subject: originalEmail.subject,
+            sender: originalEmail.sender,
+            senderName: extractNameFromEmail(originalEmail.sender),
+            content: originalEmail.clean_text || originalEmail.body,
+            sentiment: originalEmail.analysis?.sentiment_category,
+            priority: originalEmail.analysis?.priority_score,
+            issues: originalEmail.analysis?.specific_topics || [],
+            actionItems: originalEmail.analysis?.action_items || [],
+            summary: originalEmail.analysis?.summary
+        };
+
+        const systemPrompt = `You are Bill Bachenberg, President of the NRA, creating an inline reply to member communications.
+
+        CRITICAL INSTRUCTIONS:
+        - DO NOT change the original text
+        - ONLY provide: brief intro, inline responses where appropriate, and sign-off
+        - Keep responses concise and contextual
+        - Maintain a ${tone} but respectful tone
+        - Show appreciation for their membership and feedback
+        - AUTO-DETECT the best approach: if the email contains specific questions, concerns, or points that benefit from individual responses, use inline format
+        - If the email is better suited for a traditional reply, provide fewer but more comprehensive inline responses
+
+        ANALYSIS: Look for these indicators that make emails suitable for inline replies:
+        - Multiple specific questions (like "Who specifically...?", "What were the specific instances...?", "Why did...?")
+        - Numbered or bulleted lists of concerns
+        - Multiple distinct topics or issues raised
+        - Requests for specific information or clarification
+        - Sequential concerns that build upon each other
+        - Sections like "Questions remain:", "Here are my concerns:", "Issues I need addressed:"
+        - Lists of specific questions that require individual answers
+
+        CRITICAL: Pay special attention to:
+        - Question sections (look for "Questions remain:", "My questions are:", etc.)
+        - Each individual question in a list or paragraph
+        - Specific requests for information or clarification
+        - References to specific people, events, or situations that need addressing
+
+        Create an intelligent inline reply format with:
+        1. Brief introduction acknowledging the sender and their message
+        2. Inline responses for EACH major point, question, or concern raised
+        3. Address specific questions individually - do not group unrelated questions
+        4. Provide direct responses to named individuals or specific events mentioned
+        5. Professional closing
+
+        Original Email Details:
+        - From: ${emailContext.senderName} (${emailContext.sender})
+        - Subject: ${emailContext.subject}
+        - Sentiment: ${emailContext.sentiment || 'neutral'}
+        - Priority Level: ${emailContext.priority || 'standard'}
+        - Key Issues: ${emailContext.issues.length > 0 ? emailContext.issues.join(', ') : 'general communication'}
+        - Summary: ${emailContext.summary || 'Member communication'}
+
+        Original Email Content: ${emailContext.content}
+
+        CRITICAL PARSING INSTRUCTIONS - FOLLOW EXACTLY:
+        1. Read the ENTIRE email word by word
+        2. Identify ALL question marks (?) in the email - each represents a question that needs an answer
+        3. Look for sections like "Questions remain:", "Here are my concerns:", etc. - these sections contain multiple individual questions
+        4. Extract EVERY sentence that ends with a question mark as a separate inline response
+        5. Extract EVERY sentence that asks for specific information (even without ?) as a separate inline response
+        6. Pay special attention to questions about specific people (Bob Barr, Oliver North, Wayne LaPierre) - these need individual answers
+        7. Address each question individually - do not group or summarize multiple questions into one response
+        8. If you see "Who specifically...", "What were the specific...", "Why did...", "How many...", these are individual questions requiring individual responses
+        9. Count the questions - if you see 8+ questions in the email, you should have 8+ inline responses
+        10. Do not create generic responses - answer the exact question asked with specific information
+        11. SPECIAL ATTENTION: If you see "Questions remain:" followed by multiple questions, each question after that header needs its own inline response
+
+        EXAMPLES OF WHAT TO EXTRACT (from Mark's email specifically):
+        - "Who *specifically* misused NRA members' contributions?" → Extract this exact question
+        - "How many people were involved." → Extract this (even without ?)
+        - "What were the *specific* instances of malfeasance?" → Extract this exact question
+        - "Why do members have to hear about NRA improprieties from media outlets--AND, invariably, from outlets who oppose the NRA and the Second Amendment?!" → Extract this
+        - "This is the *second* group of NRA leadership administrators who came after Wayne LaPierre resigned. What happened to the first group?" → Extract the question part
+        - "Why did Bob Barr leave?" → Extract this exact question
+        - "Why isn't Lieutenant Colonel Oliver North associated with NRA leadership anymore?" → Extract this exact question
+        - "How about providing a forum (online) where we can see/hear these prospective directors/administrators present themselves and their viewpoints?" → Extract this
+        - "AGAIN, why do members have to find out ANY *specific* details about major NRA changes through the media or Wikipedia, INSTEAD OF THROUGH THE NRA itself?!" → Extract this
+
+        QUALITY CHECK: Before responding, count your inlineResponses. If the original email has 8+ distinct questions, you should have close to 8+ inline responses, not 3-6 generic ones.
+
+        IMPORTANT: Return ONLY valid JSON - do not wrap in markdown code blocks or any other formatting. Return pure JSON only.
+
+        Return the output in the following JSON format:
+        {
+            "subject": "Re: ${emailContext.subject}",
+            "intro": "Brief acknowledgment of the sender and their message",
+            "inlineResponses": [
+                {
+                    "originalText": "Relevant excerpt or question from original email",
+                    "response": "Your direct, specific response to this point"
+                }
+            ],
+            "closing": "Professional closing and sign-off",
+            "isInlineSuitable": true,
+            "detectedFeatures": ["questions", "multiple_topics", "specific_concerns", "transparency_requests"]
+        }`;
+
+        const openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY
+        });
+
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+                { role: "system", content: systemPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 1500
+        });
+
+        const aiResponse = completion.choices[0].message.content;
+        console.log('Raw AI Response:', aiResponse);
+
+        // Parse the JSON response - handle markdown code blocks if present
+        let parsedResponse;
+        try {
+            // Clean the response of markdown code blocks if present
+            let cleanResponse = aiResponse.trim();
+            if (cleanResponse.startsWith('```json')) {
+                cleanResponse = cleanResponse.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+            } else if (cleanResponse.startsWith('```')) {
+                cleanResponse = cleanResponse.replace(/```\s*/g, '').replace(/```\s*$/g, '');
+            }
+            
+            parsedResponse = JSON.parse(cleanResponse);
+        } catch (parseError) {
+            console.error('JSON Parse Error:', parseError);
+            console.error('Raw AI Response:', aiResponse);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to parse AI response'
+            });
+        }
+
+        res.json({
+            success: true,
+            reply: parsedResponse,
+            usage: completion.usage
+        });
+
+    } catch (error) {
+        console.error('AI Reply Inline Generation Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to generate inline reply. Please try again.'
+        });
+    }
+});
+
 app.post('/api/ai/compose', async (req, res) => {
     try {
         const { prompt, tone } = req.body;
@@ -1266,7 +1442,7 @@ app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
         const result = await query(insertQuery, [
             type,
             content,
-            originalEmail || null,
+            originalEmail ? JSON.stringify(originalEmail) : null,
             JSON.stringify(metadata || {}),
             new Date().toISOString(),
             req.session.username,
@@ -1283,7 +1459,6 @@ app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
             success: true,
             item: result.rows[0]
         });
-
     } catch (error) {
         console.error('AI Queue Add Error:', error);
         res.json({
