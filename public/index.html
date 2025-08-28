@@ -3321,7 +3321,7 @@
                     <button class="regenerate-btn" onclick="regenerateEmailDraft()" style="display: none;"
                         id="regenerateBtn">
                         <i class="fas fa-redo"></i>
-                        Regenerate
+                        Regenerate Inline
                     </button>
                     <button class="reply-inline-btn" onclick="generateReplyInline()" style="display: none;"
                         id="replyInlineBtn">
@@ -6026,7 +6026,7 @@
         async function regenerateEmailDraft() {
             const modalTitle = document.getElementById('composeModalTitle').textContent;
             if (modalTitle.includes('Reply with AI')) {
-                await generateAIReply();
+                await generateReplyInline();
             } else {
                 await generateEmailDraft();
             }
@@ -7167,12 +7167,14 @@
                 </div>
                 <div class="ai-queue-item-actions">
                     <input type="checkbox" onchange="toggleQueueItemSelection('${item.id}', this)" style="margin-right: 8px; accent-color: #c41e3a;">
+                    ${aiQueueFilters.status !== 'sent' ? `
                     <button class="ai-queue-action-btn ai-queue-send-btn" onclick="sendAIReply('${item.id}')">
                         <i class="fas fa-paper-plane"></i> Send
                     </button>
                     <button class="ai-queue-action-btn ai-queue-edit-btn" onclick="editAIReply('${item.id}')">
                         <i class="fas fa-edit"></i> Edit
                     </button>
+                    ` : ''}
                     <button class="ai-queue-action-btn ai-queue-dismiss-btn" onclick="dismissAIReply('${item.id}')">
                         <i class="fas fa-times"></i> Dismiss
                     </button>
@@ -7240,6 +7242,8 @@
             }
 
             renderAIQueue();
+            // Update bulk actions visibility to handle Send Selected button when filter changes
+            updateBulkActionsVisibility();
         }
 
 
@@ -7805,10 +7809,16 @@
         function updateBulkActionsVisibility() {
             const bulkActions = document.getElementById('bulkActions');
             const selectedCount = document.getElementById('selectedCount');
+            const sendSelectedBtn = bulkActions.querySelector('.bulk-send-btn');
 
             if (selectedQueueItems.size > 0) {
                 bulkActions.style.display = 'flex';
                 selectedCount.textContent = selectedQueueItems.size;
+                
+                // Hide Send Selected button when "sent" filter is active
+                if (sendSelectedBtn) {
+                    sendSelectedBtn.style.display = aiQueueFilters.status === 'sent' ? 'none' : 'flex';
+                }
             } else {
                 bulkActions.style.display = 'none';
             }
