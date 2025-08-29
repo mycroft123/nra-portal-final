@@ -1480,7 +1480,7 @@ app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
 // AI Queue Update API
 app.post('/api/ai/queue/update', requireAuth, async (req, res) => {
     try {
-        const { id, status, content, contentHtml, subject, tone, metadata, priority, type, lastEdited, prompt } = req.body;
+        const { id, status, content, contentHtml, subject, tone, metadata, priority, type, prompt } = req.body;
         const userId = req.session.username;
 
         // Validate required fields
@@ -1581,18 +1581,6 @@ app.post('/api/ai/queue/update', requireAuth, async (req, res) => {
             paramCount++;
             updateFields.push(`type = $${paramCount}`);
             updateValues.push(type);
-        }
-
-        if (lastEdited !== undefined) {
-            paramCount++;
-            updateFields.push(`updated_at = $${paramCount}`);
-            updateValues.push(lastEdited);
-        }
-
-        if (prompt !== undefined) {
-            paramCount++;
-            updateFields.push(`prompt = $${paramCount}`);
-            updateValues.push(prompt);
         }
 
         if (prompt !== undefined) {
