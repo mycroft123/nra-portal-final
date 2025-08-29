@@ -7283,20 +7283,41 @@
             const filterRow = element.closest('.ai-queue-filter-row');
             const filterLabel = filterRow.querySelector('.ai-queue-filter-label').textContent.toLowerCase();
 
-            filterRow.querySelectorAll('.ai-queue-filter-chip').forEach(chip => {
-                chip.classList.remove('active');
-            });
-            element.classList.add('active');
-
+            // Handle Status filters (exclusive - only one can be active)
             if (filterLabel.includes('status')) {
-                console.log(filterValue, 'filterValue---------------');
-
+                filterRow.querySelectorAll('.ai-queue-filter-chip').forEach(chip => {
+                    chip.classList.remove('active');
+                });
+                element.classList.add('active');
                 aiQueueFilters.status = filterValue;
-            } else if (filterLabel.includes('type')) {
-                aiQueueFilters.type = filterValue;
-            } else if (filterLabel.includes('priority')) {
-                aiQueueFilters.priority = filterValue;
+            } 
+            // Handle Type and Priority filters (toggle - can be selected/deselected)
+            else if (filterLabel.includes('type') || filterLabel.includes('priority')) {
+                const isCurrentlyActive = element.classList.contains('active');
+                
+                if (isCurrentlyActive) {
+                    // Deselect - remove active class and set to 'all'
+                    element.classList.remove('active');
+                    if (filterLabel.includes('type')) {
+                        aiQueueFilters.type = 'all';
+                    } else if (filterLabel.includes('priority')) {
+                        aiQueueFilters.priority = 'all';
+                    }
+                } else {
+                    // Select - remove active from others in the same row and activate this one
+                    filterRow.querySelectorAll('.ai-queue-filter-chip').forEach(chip => {
+                        chip.classList.remove('active');
+                    });
+                    element.classList.add('active');
+                    if (filterLabel.includes('type')) {
+                        aiQueueFilters.type = filterValue;
+                    } else if (filterLabel.includes('priority')) {
+                        aiQueueFilters.priority = filterValue;
+                    }
+                }
             }
+
+            console.log('AI Queue Filters:', aiQueueFilters);
 
             renderAIQueue();
             // Update bulk actions visibility to handle Send Selected button when filter changes
@@ -7344,9 +7365,11 @@
             }
         }
 
-        function sendAIReply(itemId) {
+        function sendAIReply(itemId, isBulk = false) {
             const item = aiQueue.find(i => i.id == itemId);
-            showLoadingOverlay(item.type === 'compose' ? 'AI is sending your compose...' : 'AI is sending your reply...', true);
+            if (!isBulk) {
+                showLoadingOverlay(item.type === 'compose' ? 'AI is sending your compose...' : 'AI is sending your reply...', true);
+            }
             if (item) {
                 fetch(API_BASE_URL + '/ai/queue/send/' + itemId, {
                     method: 'GET',
@@ -7356,15 +7379,24 @@
                     credentials: 'include'
                 }).then(response => response.json()).then(data => {
                     if (data.success) {
-                        alert(`Email "${item.subject || 'AI Generated Email'}" sent successfully!`);
-                        loadAIQueue();
+                        if (!isBulk) {
+                            alert(`Email "${item.subject || 'AI Generated Email'}" sent successfully!`);
+                            loadAIQueue();
+                        }
                     } else {
-                        alert('Failed to send email');
+                        if (!isBulk) {
+                            alert('Failed to send email');
+                        }
                     }
                 }).catch(error => {
                     console.error('Error sending email:', error);
+                    if (!isBulk) {
+                        alert('Failed to send email');
+                    }
                 }).finally(() => {
-                    showLoadingOverlay('', false);
+                    if (!isBulk) {
+                        showLoadingOverlay('', false);
+                    }
                 });
             }
         }
@@ -7840,20 +7872,33 @@
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                alert('Email dismissed successfully!');
-                                loadAIQueue();
+                                if (!isBulk) {
+                                    alert('Email dismissed successfully!');
+                                }
+                                // Only reload queue for individual dismissals, not bulk
+                                if (!isBulk) {
+                                    loadAIQueue();
+                                }
                             } else {
-                                alert('Failed to dismiss email from AI Queue');
+                                if (!isBulk) {
+                                    alert('Failed to dismiss email from AI Queue');
+                                }
                             }
                         })
                         .catch(error => {
                             console.error('AI Queue Delete Error:', error);
-                            alert('Failed to dismiss email from AI Queue');
+                            if (!isBulk) {
+                                alert('Failed to dismiss email from AI Queue');
+                            }
                         })
                         .finally(() => {
-                            showLoadingOverlay('', false);
+                            if (!isBulk) {
+                                showLoadingOverlay('', false);
+                            }
                             selectedQueueItems.delete(itemId);
-                            updateBulkActionsVisibility();
+                            if (!isBulk) {
+                                updateBulkActionsVisibility();
+                            }
                         });
                 }
             }
@@ -7899,11 +7944,68 @@
             if (selectedItems.length === 0) return;
 
             if (confirm(`Send ${selectedItems.length} selected emails?`)) {
+                showLoadingOverlay(`Sending ${selectedItems.length} emails...`, true);
+                
+                // Process all sends and track completion
+                let completedCount = 0;
+                let hasErrors = false;
+                let successCount = 0;
+
                 selectedItems.forEach(itemId => {
-                    sendAIReply(itemId);
+                    const item = aiQueue.find(i => i.id == itemId);
+                    if (item) {
+                        fetch(API_BASE_URL + '/ai/queue/send/' + itemId, {
+                            method: 'GET',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            credentials: 'include'
+                        })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    successCount++;
+                                } else {
+                                    hasErrors = true;
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error sending email:', error);
+                                hasErrors = true;
+                            })
+                            .finally(() => {
+                                completedCount++;
+                                selectedQueueItems.delete(itemId);
+                                
+                                // Only reload queue once when all sends are complete
+                                if (completedCount === selectedItems.length) {
+                                    showLoadingOverlay('', false);
+                                    if (hasErrors) {
+                                        if (successCount > 0) {
+                                            alert(`${successCount} emails sent successfully. Some emails failed to send. Please check and try again.`);
+                                        } else {
+                                            alert('All emails failed to send. Please check and try again.');
+                                        }
+                                    } else {
+                                        alert(`${selectedItems.length} emails sent successfully!`);
+                                    }
+                                    // Reload queue only once at the end
+                                    loadAIQueue();
+                                    updateBulkActionsVisibility();
+                                }
+                            });
+                    } else {
+                        // If item not found in queue, still count as completed
+                        completedCount++;
+                        selectedQueueItems.delete(itemId);
+                        
+                        if (completedCount === selectedItems.length) {
+                            showLoadingOverlay('', false);
+                            loadAIQueue();
+                            updateBulkActionsVisibility();
+                        }
+                    }
                 });
-                selectedQueueItems.clear();
-                updateBulkActionsVisibility();
             }
         }
 
@@ -7912,8 +8014,60 @@
             if (selectedItems.length === 0) return;
 
             if (confirm(`Dismiss ${selectedItems.length} selected items?`)) {
+                showLoadingOverlay(`Dismissing ${selectedItems.length} items...`, true);
+                
+                // Process all deletions and track completion
+                let completedCount = 0;
+                let hasErrors = false;
+
                 selectedItems.forEach(itemId => {
-                    dismissAIReply(itemId, true);
+                    const item = aiQueue.find(item => item.id == itemId);
+                    if (item) {
+                        fetch(API_BASE_URL + '/ai/queue/' + itemId, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            credentials: 'include'
+                        })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (!data.success) {
+                                    hasErrors = true;
+                                }
+                            })
+                            .catch(error => {
+                                console.error('AI Queue Delete Error:', error);
+                                hasErrors = true;
+                            })
+                            .finally(() => {
+                                completedCount++;
+                                selectedQueueItems.delete(itemId);
+                                
+                                // Only reload queue once when all deletions are complete
+                                if (completedCount === selectedItems.length) {
+                                    showLoadingOverlay('', false);
+                                    if (hasErrors) {
+                                        alert('Some items failed to dismiss. Please check and try again.');
+                                    } else {
+                                        alert(`${selectedItems.length} items dismissed successfully!`);
+                                    }
+                                    // Reload queue only once at the end
+                                    loadAIQueue();
+                                    updateBulkActionsVisibility();
+                                }
+                            });
+                    } else {
+                        // If item not found in queue, still count as completed
+                        completedCount++;
+                        selectedQueueItems.delete(itemId);
+                        
+                        if (completedCount === selectedItems.length) {
+                            showLoadingOverlay('', false);
+                            loadAIQueue();
+                            updateBulkActionsVisibility();
+                        }
+                    }
                 });
             }
         }
