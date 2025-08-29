@@ -954,13 +954,16 @@ app.post('/api/ai/reply', requireAuth, async (req, res) => {
         const systemPrompt = `You are Bill Bachenberg, President of the NRA, responding to member communications. 
         
         Create a professional, ${tone} email reply that:
-        - Addresses the sender by their name: ${emailContext.senderName}
+        - Addresses the sender by their name: If both a name is present in the signature and an email address is provided, always use the name from the signature in the salutation; otherwise, default to ${emailContext.senderName}.
         - Acknowledges their specific concerns or points raised
         - Provides a thoughtful, constructive response
         - Maintains a ${tone} but respectful tone
         - Shows appreciation for their membership and feedback
         - Includes appropriate professional closing
         - Is suitable for NRA leadership communication
+        - Ensures that all placeholders, such as [Sender] or [Concern], are replaced with the actual corresponding information from the email context. Do not leave any unspecified placeholders in the response.
+        - Never make commitments, accept invitations, confirm purchases, or schedule meetings on the user's behalf in the reply.
+        - If the email requires a decision or action, clearly flag this in the draft as [User Action Needed] so the user can review before sending.
         
         Original Email Details:
         - From: ${emailContext.senderName} (${emailContext.sender})
@@ -1065,6 +1068,7 @@ app.post('/api/ai/reply-inline', requireAuth, async (req, res) => {
         - Show appreciation for their membership and feedback
         - AUTO-DETECT the best approach: if the email contains specific questions, concerns, or points that benefit from individual responses, use inline format
         - If the email is better suited for a traditional reply, provide fewer but more comprehensive inline responses
+        - Never make commitments, accept invitations, confirm purchases, or schedule meetings on the user's behalf. If the email requires a decision or action, clearly flag it in the draft as [User Action Needed] so the user can review before sending.
 
         ANALYSIS: Look for these indicators that make emails suitable for inline replies:
         - Multiple specific questions (like "Who specifically...?", "What were the specific instances...?", "Why did...?")
@@ -1291,7 +1295,7 @@ app.post('/api/ai/compose', async (req, res) => {
         // `;
 
         const systemPrompt = `
-                                Developer: You are an AI assistant tasked with composing professional emails for NRA leadership.
+                               You are an AI assistant tasked with composing professional emails for NRA leadership.
 
                                 Begin with a concise checklist (3-7 bullets) of your intended actions before generating the output.
 
@@ -1306,6 +1310,9 @@ app.post('/api/ai/compose', async (req, res) => {
                                 - Respect the user's requested tone (${tone}); fallback to "professional" if the input is missing or malformed.
                                 - If information for any required output field is not provided, leave that field blank using the placeholder format [Your Field Name], e.g., [Your Name].
                                 - Automatically recognize and correct spelling mistakes in the email content before generating the output.
+                                - Ensure that all placeholders, such as [Sender] or [Concern], are replaced with the actual corresponding information from the email context. Do not leave any unspecified placeholders in the response.
+                                - Never make commitments, accept invitations, confirm purchases, or schedule meetings on the user's behalf in the reply.
+                                - If the email requires a decision or action, clearly flag this in the draft as [User Action Needed] so the user can review before sending.
 
                                 # Output Format
                                 - Your response must be a valid JSON object containing these fields in the specified order:
@@ -1417,7 +1424,7 @@ app.get('/api/ai/queue', requireAuth, async (req, res) => {
 app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
     try {
 
-        const { type, content, originalEmail, metadata, tone, contentHtml, subject, status } = req.body;
+        const { type, content, originalEmail, metadata, tone, contentHtml, subject, status, prompt } = req.body;
         // TODO:
         // 1. Save the queue item to the database
         const queueItem = {
@@ -1432,12 +1439,12 @@ app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
         };
 
         const insertQuery = `
-        INSERT INTO ai_queue (type, content, original_email, metadata, timestamp, user_id, tone, content_html, subject, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        INSERT INTO ai_queue (type, content, original_email, metadata, timestamp, user_id, tone, content_html, subject, status, prompt)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
     `;
 
-        console.log({ type, content, originalEmail, metadata, tone, contentHtml, subject, status }, ';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;');
+        console.log({ type, content, originalEmail, metadata, tone, contentHtml, subject, status, prompt }, ';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;');
 
 
         const result = await query(insertQuery, [
@@ -1450,7 +1457,8 @@ app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
             tone,
             contentHtml,
             subject,
-            status
+            status,
+            prompt
         ]);
 
         // TODO:
@@ -1472,7 +1480,7 @@ app.post('/api/ai/queue/add', requireAuth, async (req, res) => {
 // AI Queue Update API
 app.post('/api/ai/queue/update', requireAuth, async (req, res) => {
     try {
-        const { id, status, content, contentHtml, subject, tone, metadata, priority, type, lastEdited } = req.body;
+        const { id, status, content, contentHtml, subject, tone, metadata, priority, type, lastEdited, prompt } = req.body;
         const userId = req.session.username;
 
         // Validate required fields
@@ -1573,6 +1581,18 @@ app.post('/api/ai/queue/update', requireAuth, async (req, res) => {
             paramCount++;
             updateFields.push(`type = $${paramCount}`);
             updateValues.push(type);
+        }
+
+        if (lastEdited !== undefined) {
+            paramCount++;
+            updateFields.push(`updated_at = $${paramCount}`);
+            updateValues.push(lastEdited);
+        }
+
+        if (prompt !== undefined) {
+            paramCount++;
+            updateFields.push(`prompt = $${paramCount}`);
+            updateValues.push(prompt);
         }
 
         // Always update the updated_at timestamp
