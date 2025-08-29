@@ -1635,6 +1635,22 @@
             transition: all 0.3s;
         }
 
+        .regenerate-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #aiModeToggle:disabled {
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #aiInlineModeToggle:disabled {
+            cursor: not-allowed;
+            transform: none;
+        }
+
         .regenerate-btn:hover {
             background: #e1dfdd;
         }
@@ -3323,7 +3339,7 @@
                         <i class="fas fa-redo"></i>
                         Regenerate Inline
                     </button>
-                    <button class="reply-inline-btn" onclick="generateReplyInline()" style="display: none;"
+                    <button class="reply-inline-btn" onclick="regenerateEmailDraft()" style="display: none;"
                         id="replyInlineBtn">
                         <i class="fas fa-reply"></i>
                         Reply Inline
@@ -5312,6 +5328,8 @@
             document.getElementById('aiModeToggle').checked = false;
             document.getElementById('aiInlineModeToggle').checked = false;
 
+            document.getElementById('toneSelector').value = 'professional'
+
             // Clean up editing state
             if (window.editingQueueItem) {
                 delete window.editingQueueItem;
@@ -6028,6 +6046,15 @@
         }
 
         async function regenerateEmailDraft() {
+            const aiModeToggle = document.getElementById('aiModeToggle')
+            const aiInlineModeToggle = document.getElementById('aiInlineModeToggle')
+
+            aiModeToggle.checked = false
+            aiInlineModeToggle.checked = false
+
+            aiModeToggle.disabled = true
+            aiInlineModeToggle.disabled = true;
+
             const regenerateBtn = document.getElementById('regenerateBtn');
             const originalHTML = regenerateBtn.innerHTML;
             regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerating.....';
@@ -6042,6 +6069,9 @@
 
             regenerateBtn.innerHTML = originalHTML
             regenerateBtn.disabled = false;
+
+            aiModeToggle.disabled = false
+            aiInlineModeToggle.disabled = false;
         }
 
         function saveToAIQueue() {
