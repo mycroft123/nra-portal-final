@@ -5184,7 +5184,7 @@
 
                 // Show Generate Draft and Regenerate buttons in compose mode
                 document.querySelector('.generate-btn').style.display = 'inline-flex';
-                regenerateBtn.innerText = 'Regenerate'
+                regenerateBtn.innerHTML =  `<i class="fas fa-redo-alt"></i> Regenerate`
                 regenerateBtn.style.display = 'none'; // Initially hidden until first draft is generated
                 document.getElementById('replyInlineBtn').style.display = 'none'; // Hide Reply Inline in compose mode
 
@@ -6075,6 +6075,21 @@
         }
 
         function saveToAIQueue() {
+            // Check if this is a compose type (not reply)
+            const modalTitle = document.getElementById('composeModalTitle').textContent;
+            const isCompose = modalTitle.includes('Compose with AI') || window.currentComposeType === 'COMPOSE_WITH_AI';
+            
+            // Only validate prompt for compose type
+            if (isCompose) {
+                const promptElement = document.getElementById('composePrompt');
+                const prompt = promptElement ? promptElement.value.trim() : '';
+                
+                if (!prompt) {
+                    alert('Please describe what you want to communicate in the prompt field.');
+                    return;
+                }
+            }
+
             const currentContent = getCurrentEditorContent();
             if (!currentContent.trim()) {
                 alert('Please generate a draft first.');
@@ -7967,8 +7982,17 @@
 
             const promptElement = document.getElementById('composePrompt');
             const toneElement = document.getElementById('toneSelector');
-            const prompt = promptElement ? promptElement.value : '';
+            const prompt = promptElement ? promptElement.value.trim() : '';
             const tone = toneElement ? toneElement.value : 'professional';
+
+            // Check if this is a compose type (not reply) - only validate prompt for compose
+            const modalTitle = document.getElementById('composeModalTitle').textContent;
+            const isCompose = modalTitle.includes('Compose with AI') || window.currentComposeType === 'COMPOSE_WITH_AI';
+            
+            if (isCompose && !prompt) {
+                alert('Please describe what you want to communicate in the prompt field.');
+                return;
+            }
 
             if (!currentContent.trim()) {
                 alert('Please generate a draft first.');
