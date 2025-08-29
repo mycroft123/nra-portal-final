@@ -7948,7 +7948,9 @@
                         content: currentContent,
                         contentHtml: contentHtml,
                         tone: tone,
-                        status: 'ready' // Mark as ready after editing
+                        status: 'ready', // Mark as ready after editing
+                        prompt: prompt,
+                        lastEdited: new Date().toISOString()
                     };
 
                     // Get subject from the current draft if available
@@ -8077,7 +8079,8 @@
                     contentHtml: contentHtml,
                     originalPrompt: prompt,
                     tone: tone,
-                    status: 'review'
+                    status: 'review',
+                    prompt: prompt
                 };
 
                 // If it's a reply, include the original email context

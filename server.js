@@ -1398,7 +1398,7 @@ app.get('/api/ai/queue', requireAuth, async (req, res) => {
         SELECT 
             id, type, content, original_email, metadata, status, 
             timestamp, user_id, priority, created_at, updated_at,
-            tone, content_html, subject
+            tone, content_html, subject, prompt
         FROM ai_queue
         WHERE ${whereConditions.join(' AND ')}
         ORDER BY timestamp DESC
@@ -1587,6 +1587,12 @@ app.post('/api/ai/queue/update', requireAuth, async (req, res) => {
             paramCount++;
             updateFields.push(`updated_at = $${paramCount}`);
             updateValues.push(lastEdited);
+        }
+
+        if (prompt !== undefined) {
+            paramCount++;
+            updateFields.push(`prompt = $${paramCount}`);
+            updateValues.push(prompt);
         }
 
         if (prompt !== undefined) {
