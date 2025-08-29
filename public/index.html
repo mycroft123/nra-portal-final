@@ -5157,6 +5157,8 @@
             const composeInputSection = document.getElementById('composeInputView');
             const composeToneSection = document.querySelector('.compose-tone-section');
 
+            const regenerateBtn = document.getElementById('regenerateBtn')
+
             if (type === 'COMPOSE_WITH_AI') {
                 titleElement.textContent = `Compose with AI`;
 
@@ -5166,7 +5168,8 @@
 
                 // Show Generate Draft and Regenerate buttons in compose mode
                 document.querySelector('.generate-btn').style.display = 'inline-flex';
-                document.getElementById('regenerateBtn').style.display = 'none'; // Initially hidden until first draft is generated
+                regenerateBtn.innerText = 'Regenerate'
+                regenerateBtn.style.display = 'none'; // Initially hidden until first draft is generated
                 document.getElementById('replyInlineBtn').style.display = 'none'; // Hide Reply Inline in compose mode
 
                 document.getElementById('composePrompt').focus();
@@ -5541,7 +5544,7 @@
             }
         }
 
-        async function generateEmailDraft() {
+        async function generateEmailDraft(type='') {
             const prompt = document.getElementById('composePrompt').value.trim();
             const tone = document.getElementById('toneSelector').value;
 
@@ -5551,7 +5554,7 @@
             }
 
             const generateBtn = document.querySelector('.generate-btn');
-            generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            if(type !== 'REGENERATE_EMAIL') generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
             generateBtn.disabled = true;
 
             try {
@@ -5581,6 +5584,7 @@
 
                     window.editorInstance.html.set(htmlContent);
 
+                    generateBtn.style.display = 'none'
                     document.getElementById('draftSection').style.display = 'block';
                     document.getElementById('regenerateBtn').style.display = 'inline-flex';
                     document.getElementById('sendEmailBtn').disabled = false;
@@ -6024,12 +6028,20 @@
         }
 
         async function regenerateEmailDraft() {
+            const regenerateBtn = document.getElementById('regenerateBtn');
+            const originalHTML = regenerateBtn.innerHTML;
+            regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerating.....';
+            regenerateBtn.disabled = true;
+
             const modalTitle = document.getElementById('composeModalTitle').textContent;
             if (modalTitle.includes('Reply with AI')) {
-                await generateReplyInline();
+                await generateReplyInline('REGENERATE_EMAIL');
             } else {
-                await generateEmailDraft();
+                await generateEmailDraft('REGENERATE_EMAIL');
             }
+
+            regenerateBtn.innerHTML = originalHTML
+            regenerateBtn.disabled = false;
         }
 
         function saveToAIQueue() {
@@ -7101,7 +7113,7 @@
                 aiResponse: dbItem.content,
                 content: dbItem.content,
                 contentHtml: dbItem.content_html,
-                originalPrompt: dbItem.metadata?.originalPrompt || '',
+                originalPrompt: dbItem.prompt || '',
                 tone: dbItem.tone,
                 status: dbItem.status,
                 timestamp: dbItem.timestamp || dbItem.updated_at,
@@ -7154,7 +7166,7 @@
                 <div class="ai-queue-item-info">
                     <div class="ai-queue-item-subject">${item.subject || item.originalEmail?.subject || 'AI Generated Email'}</div>
                     <div class="ai-queue-item-from">
-                        ${item.type === 'compose' ? 'New Email' : `Reply to: ${item.originalEmail?.from || 'Unknown'}`}
+                        ${item.type === 'compose' ? 'New Email' : `Reply to: ${item.originalEmail?.to || 'Unknown'}`}
                     </div>
                     <div class="ai-queue-item-meta">
                         <span><i class="fas fa-clock"></i> ${new Date(item.timestamp).toLocaleString()}</span>
@@ -7167,7 +7179,7 @@
                 </div>
                 <div class="ai-queue-item-actions">
                     <input type="checkbox" onchange="toggleQueueItemSelection('${item.id}', this)" style="margin-right: 8px; accent-color: #c41e3a;">
-                    ${aiQueueFilters.status !== 'sent' ? `
+                    ${aiQueueFilters.status !== 'sent' && item.status !== 'sent' ? `
                     <button class="ai-queue-action-btn ai-queue-send-btn" onclick="sendAIReply('${item.id}')">
                         <i class="fas fa-paper-plane"></i> Send
                     </button>
@@ -7672,13 +7684,13 @@
         }
 
         // Generate Reply Inline function
-        async function generateReplyInline() {
+        async function generateReplyInline(type='') {
             const tone = document.getElementById('toneSelector').value || 'professional';
             const replyInlineBtn = document.getElementById('replyInlineBtn');
 
             // Show loading state
             const originalHTML = replyInlineBtn.innerHTML;
-            replyInlineBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Inline Reply...';
+            if(type !== 'REGENERATE_EMAIL') replyInlineBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Inline Reply...';
             replyInlineBtn.disabled = true;
 
             try {
@@ -7988,7 +8000,7 @@
                                         metadata: updatedItem.metadata,
                                         // Frontend compatibility fields
                                         aiResponse: updatedItem.content, // Maintain compatibility
-                                        originalPrompt: updatedItem.metadata?.originalPrompt || '',
+                                        originalPrompt: updatedItem?.prompt || '',
                                         // Preserve original email data if it exists
                                         originalEmail: aiQueue[queueIndex].originalEmail,
                                         replyTo: aiQueue[queueIndex].replyTo,
@@ -8106,7 +8118,7 @@
                     subject: item.subject,
                     aiResponse: item.content,
                     content: item.content,
-                    originalPrompt: item?.originalPrompt,
+                    originalPrompt: item?.prompt,
                     tone: item.tone,
                     status: item.status,
                     timestamp: item.timestamp,
