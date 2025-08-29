@@ -5562,7 +5562,7 @@
             }
         }
 
-        async function generateEmailDraft(type='') {
+        async function generateEmailDraft(type = '') {
             const prompt = document.getElementById('composePrompt').value.trim();
             const tone = document.getElementById('toneSelector').value;
 
@@ -5572,7 +5572,7 @@
             }
 
             const generateBtn = document.querySelector('.generate-btn');
-            if(type !== 'REGENERATE_EMAIL') generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            if (type !== 'REGENERATE_EMAIL') generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
             generateBtn.disabled = true;
 
             try {
@@ -7714,13 +7714,13 @@
         }
 
         // Generate Reply Inline function
-        async function generateReplyInline(type='') {
+        async function generateReplyInline(type = '') {
             const tone = document.getElementById('toneSelector').value || 'professional';
             const replyInlineBtn = document.getElementById('replyInlineBtn');
 
             // Show loading state
             const originalHTML = replyInlineBtn.innerHTML;
-            if(type !== 'REGENERATE_EMAIL') replyInlineBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Inline Reply...';
+            if (type !== 'REGENERATE_EMAIL') replyInlineBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Inline Reply...';
             replyInlineBtn.disabled = true;
 
             try {
@@ -7809,33 +7809,46 @@
         }
 
         // Dismis with API
-        function dismissAIReply(itemId) {
-            const item = aiQueue.find(item => item.id == itemId);
-            showLoadingOverlay(item.type === 'compose' ? 'Dismissing AI Compose...' : 'Dismissing AI Reply...', true);
-            if (item) {
-                fetch(API_BASE_URL + '/ai/queue/' + itemId, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include'
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert('Email dismissed successfully!');
-                            loadAIQueue();
-                        } else {
+        function dismissAIReply(itemId, isBulk = false) {
+
+            const dismiss = () => {
+                const item = aiQueue.find(item => item.id == itemId);
+                showLoadingOverlay(item.type === 'compose' ? 'Dismissing AI Compose...' : 'Dismissing AI Reply...', true);
+                if (item) {
+                    fetch(API_BASE_URL + '/ai/queue/' + itemId, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        credentials: 'include'
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert('Email dismissed successfully!');
+                                loadAIQueue();
+                            } else {
+                                alert('Failed to dismiss email from AI Queue');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('AI Queue Delete Error:', error);
                             alert('Failed to dismiss email from AI Queue');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('AI Queue Delete Error:', error);
-                        alert('Failed to dismiss email from AI Queue');
-                    })
-                    .finally(() => {
-                        showLoadingOverlay('', false);
-                    });
+                        })
+                        .finally(() => {
+                            showLoadingOverlay('', false);
+                            selectedQueueItems.delete(itemId);
+                            updateBulkActionsVisibility();
+                        });
+                }
+            }
+
+            if (!isBulk) {
+                if (confirm('Are you sure you want to dismiss this email?')) {
+                    dismiss();
+                }
+            } else {
+                dismiss();
             }
         }
 
@@ -7856,7 +7869,7 @@
             if (selectedQueueItems.size > 0) {
                 bulkActions.style.display = 'flex';
                 selectedCount.textContent = selectedQueueItems.size;
-                
+
                 // Hide Send Selected button when "sent" filter is active
                 if (sendSelectedBtn) {
                     sendSelectedBtn.style.display = aiQueueFilters.status === 'sent' ? 'none' : 'flex';
@@ -7885,7 +7898,7 @@
 
             if (confirm(`Dismiss ${selectedItems.length} selected items?`)) {
                 selectedItems.forEach(itemId => {
-                    dismissAIReply(itemId);
+                    dismissAIReply(itemId, true);
                 });
             }
         }
