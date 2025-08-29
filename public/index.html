@@ -6140,26 +6140,40 @@
             aiInlineModeToggle.disabled = true;
 
             const regenerateBtn = document.getElementById('regenerateBtn');
+            const regenerateInlineBtn = document.getElementById('replyInlineBtn'); // Fixed: changed from 'regenerateInlineBtn' to 'replyInlineBtn'
             const originalHTML = regenerateBtn.innerHTML;
-            regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerating.....';
-            regenerateBtn.disabled = true;
+            const originalInlineHTML = regenerateInlineBtn.innerHTML; // Store original inline button HTML
 
             // Determine if this is a compose or reply based on modal context
             const modalTitle = document.getElementById('composeModalTitle').textContent;
             const isReply = modalTitle.includes('Reply with AI') || window.currentComposeType === 'REPLY_WITH_AI';
             
             if(type === 'REGENERATE_NORMAL') {
+                // Show spinner only on the normal regenerate button
+                regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerating.....';
+                regenerateBtn.disabled = true;
+                
                 if (isReply) {
                     await generateAIReply();
                 } else {
                     await generateEmailDraft('REGENERATE_EMAIL');
                 }
+                
+                // Reset normal button
+                regenerateBtn.innerHTML = originalHTML;
+                regenerateBtn.disabled = false;
+                
             } else if(type === 'REGENERATE_INLINE') {
+                // Show spinner only on the inline regenerate button
+                regenerateInlineBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerating Inline.....';
+                regenerateInlineBtn.disabled = true;
+                
                 await generateReplyInline('REGENERATE_EMAIL');
+                
+                // Reset inline button
+                regenerateInlineBtn.innerHTML = originalInlineHTML;
+                regenerateInlineBtn.disabled = false;
             }
-
-            regenerateBtn.innerHTML = originalHTML
-            regenerateBtn.disabled = false;
 
             aiModeToggle.disabled = false
             aiInlineModeToggle.disabled = false;
@@ -7959,7 +7973,7 @@
 
             const dismiss = () => {
                 const item = aiQueue.find(item => item.id == itemId);
-                showLoadingOverlay(item.type === 'compose' ? 'Dismissing AI Compose...' : 'Dismissing AI Reply...', true);
+                showLoadingOverlay(item.type === 'compose' ? 'Deleting AI Compose...' : 'Deleting AI Reply...', true);
                 if (item) {
                     fetch(API_BASE_URL + '/ai/queue/' + itemId, {
                         method: 'DELETE',
@@ -7972,7 +7986,7 @@
                         .then(data => {
                             if (data.success) {
                                 if (!isBulk) {
-                                    alert('Email dismissed successfully!');
+                                    alert('Email deleted successfully!');
                                 }
                                 // Only reload queue for individual dismissals, not bulk
                                 if (!isBulk) {
@@ -7980,14 +7994,14 @@
                                 }
                             } else {
                                 if (!isBulk) {
-                                    alert('Failed to dismiss email from AI Queue');
+                                    alert('Failed to delete email from AI Queue');
                                 }
                             }
                         })
                         .catch(error => {
                             console.error('AI Queue Delete Error:', error);
                             if (!isBulk) {
-                                alert('Failed to dismiss email from AI Queue');
+                                alert('Failed to delete email from AI Queue');
                             }
                         })
                         .finally(() => {
@@ -8003,7 +8017,7 @@
             }
 
             if (!isBulk) {
-                if (confirm('Are you sure you want to dismiss this email?')) {
+                if (confirm('Are you sure you want to delete this email?')) {
                     dismiss();
                 }
             } else {
