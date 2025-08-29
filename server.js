@@ -1151,7 +1151,8 @@ app.post('/api/ai/reply-inline', requireAuth, async (req, res) => {
                 { role: "system", content: systemPrompt }
             ],
             temperature: 0.7,
-            max_tokens: 1500
+            max_tokens: 1500,
+            response_format: { type: "json_object" }
         });
 
         const aiResponse = completion.choices[0].message.content;
