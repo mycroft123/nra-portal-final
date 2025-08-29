@@ -844,6 +844,10 @@
             gap: 6px;
         }
 
+        .hidden{
+            display: none;
+        }
+
         .toolbar-btn:hover {
             background: #faf9f8;
         }
@@ -3007,19 +3011,19 @@
                                         <i class="fa-solid fa-reply"></i>
                                         Reply With AI <i class="fa-solid fa-robot"></i>
                                     </button>
-                                    <button class="toolbar-btn">
+                                    <button class="toolbar-btn hidden">
                                         <i class="fas fa-reply"></i> Reply
                                     </button>
-                                    <button class="toolbar-btn">
+                                    <button class="toolbar-btn hidden">
                                         <i class="fas fa-reply-all"></i> Reply All
                                     </button>
-                                    <button class="toolbar-btn">
+                                    <button class="toolbar-btn hidden">
                                         <i class="fas fa-share"></i> Forward
                                     </button>
-                                    <button class="toolbar-btn">
+                                    <button class="toolbar-btn hidden">
                                         <i class="fas fa-trash"></i> Delete
                                     </button>
-                                    <button class="toolbar-btn">
+                                    <button class="toolbar-btn hidden">
                                         <i class="fas fa-archive"></i> Archive
                                     </button>
                                     <button class="ai-toggle-toolbar-btn" id="aiToggleBtn" onclick="toggleAIPanel()">
@@ -3132,7 +3136,7 @@
                     </button>
                     <button class="bulk-action-btn bulk-dismiss-btn" onclick="bulkDismissSelected()">
                         <i class="fas fa-times"></i>
-                        Dismiss Selected
+                        Delete Selected
                     </button>
                 </div>
 
@@ -3339,15 +3343,15 @@
                         <i class="fas fa-magic"></i>
                         Generate Draft
                     </button>
-                    <button class="regenerate-btn" onclick="regenerateEmailDraft()" style="display: none;"
+                    <button class="regenerate-btn" onclick="regenerateEmailDraft('REGENERATE_NORMAL')" style="display: none;"
                         id="regenerateBtn">
                         <i class="fas fa-redo"></i>
-                        Regenerate Inline
+                        Regenerate Normal
                     </button>
-                    <button class="reply-inline-btn" onclick="regenerateEmailDraft()" style="display: none;"
+                    <button class="reply-inline-btn" onclick="regenerateEmailDraft('REGENERATE_INLINE')" style="display: none;"
                         id="replyInlineBtn">
-                        <i class="fas fa-reply"></i>
-                        Reply Inline
+                        <i class="fas fa-redo"></i>
+                        Regenerate Inline
                     </button>
                 </div>
 
@@ -6050,7 +6054,7 @@
             }
         }
 
-        async function regenerateEmailDraft() {
+        async function regenerateEmailDraft(type='REGENERATE_NORMAL') {
             const aiModeToggle = document.getElementById('aiModeToggle')
             const aiInlineModeToggle = document.getElementById('aiInlineModeToggle')
 
@@ -6065,11 +6069,10 @@
             regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerating.....';
             regenerateBtn.disabled = true;
 
-            const modalTitle = document.getElementById('composeModalTitle').textContent;
-            if (modalTitle.includes('Reply with AI')) {
+            if(type === 'REGENERATE_NORMAL')
+                await generateAIReply()
+            else if(type === 'REGENERATE_INLINE') {
                 await generateReplyInline('REGENERATE_EMAIL');
-            } else {
-                await generateEmailDraft('REGENERATE_EMAIL');
             }
 
             regenerateBtn.innerHTML = originalHTML
@@ -7238,7 +7241,7 @@
                     </button>
                     ` : ''}
                     <button class="ai-queue-action-btn ai-queue-dismiss-btn" onclick="dismissAIReply('${item.id}')">
-                        <i class="fas fa-times"></i> Dismiss
+                        <i class="fas fa-times"></i> Delete
                     </button>
                 </div>
             </div>
