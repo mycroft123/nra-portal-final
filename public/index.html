@@ -5321,9 +5321,11 @@
                 }
             }
             document.getElementById('draftSection').style.display = 'none';
-            document.getElementById('regenerateBtn').style.display = 'none';
             document.getElementById('replyInlineBtn').style.display = 'none';
             document.getElementById('sendEmailBtn').disabled = true;
+            const regenerateBtn = document.getElementById('regenerateBtn')
+            regenerateBtn.style.display = 'none'
+            regenerateBtn.innerHTML = `<i class="fas fa-redo-alt"></i> Regenerate Normal`
 
             // Reset visibility of input sections and buttons
             document.getElementById('composeInputView').style.display = 'block';
@@ -5339,8 +5341,8 @@
 
             document.getElementById('toneSelector').value = 'professional'
 
-            // Update AI Edit toggles state on modal open
-            setTimeout(() => updateAIEditTogglesState(), 100);
+            // // Update AI Edit toggles state on modal open
+            // setTimeout(() => updateAIEditTogglesState(), 100);
 
             // Clean up editing state
             if (window.editingQueueItem) {
@@ -5444,6 +5446,12 @@
         }
 
         async function generateAIReply() {
+            const aiModeToggle = document.getElementById('aiModeToggle')
+            const aiInlineModeToggle = document.getElementById('aiInlineModeToggle')
+
+            aiModeToggle.disabled = true
+            aiInlineModeToggle.disabled = true;
+
             console.log(selectedEmail, 'selectedEmail----------------------------------->>>>>>>');
             
             if (!selectedEmail) {
@@ -5581,6 +5589,9 @@
 
                 generateBtn.innerHTML = '<i class="fas fa-magic"></i> Generate Draft';
                 generateBtn.disabled = false;
+
+                aiModeToggle.disabled = false
+                aiInlineModeToggle.disabled = false;
             }
         }
 
