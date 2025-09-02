@@ -8057,18 +8057,112 @@
             updateBulkActionsVisibility();
         }
 
+        function analyzeSelectedItems() {
+            const selectedItems = Array.from(selectedQueueItems).map(itemId => {
+                return aiQueue.find(item => item.id == itemId);
+            }).filter(item => item); // Remove any null/undefined items
+
+            // Status analysis complete
+
+            const statusCounts = {
+                ready: 0,
+                sent: 0,
+                review: 0,
+                draft: 0,
+                pending: 0,
+                failed: 0,
+                cancelled: 0
+            };
+
+            selectedItems.forEach(item => {
+                if (statusCounts.hasOwnProperty(item.status)) {
+                    statusCounts[item.status]++;
+                } else {
+                    console.warn('DEBUG: Unknown status found:', item.status);
+                }
+            });
+
+            // Status counting complete
+
+            return {
+                items: selectedItems,
+                counts: statusCounts,
+                total: selectedItems.length,
+                sendableCount: statusCounts.ready,
+                nonSendableCount: selectedItems.length - statusCounts.ready,
+                hasMixedStatuses: Object.values(statusCounts).filter(count => count > 0).length > 1
+            };
+        }
+
         function updateBulkActionsVisibility() {
             const bulkActions = document.getElementById('bulkActions');
-            const selectedCount = document.getElementById('selectedCount');
+            if (!bulkActions) {
+                console.error('bulkActions element not found');
+                return;
+            }
+            
+            // Note: We don't need selectedCount element anymore since we update button innerHTML directly
+            
             const sendSelectedBtn = bulkActions.querySelector('.bulk-send-btn');
+            const deleteSelectedBtn = bulkActions.querySelector('.bulk-dismiss-btn');
 
             if (selectedQueueItems.size > 0) {
                 bulkActions.style.display = 'flex';
-                selectedCount.textContent = selectedQueueItems.size;
+                
+                // Analyze selected items to determine button states
+                const analysis = analyzeSelectedItems();
 
-                // Hide Send Selected button when "sent" filter is active
+                // Configure Delete Selected button (always enabled for any selection)
+                if (deleteSelectedBtn) {
+                    deleteSelectedBtn.disabled = false;
+                    deleteSelectedBtn.style.opacity = '1';
+                    deleteSelectedBtn.innerHTML = `<i class="fas fa-times"></i> Delete Selected (${analysis.total})`;
+                }
+
+                // Configure Send Selected button with smart logic
                 if (sendSelectedBtn) {
-                    sendSelectedBtn.style.display = aiQueueFilters.status === 'sent' ? 'none' : 'flex';
+                    
+                    // Hide Send Selected button when "sent" filter is active (existing logic)
+                    if (aiQueueFilters.status === 'sent') {
+                        sendSelectedBtn.style.display = 'none';
+                    } else {
+                        sendSelectedBtn.style.display = 'flex';
+                        
+                        if (analysis.sendableCount === 0) {
+                            // No sendable items - disable button
+                            sendSelectedBtn.disabled = true;
+                            sendSelectedBtn.style.opacity = '0.5';
+                            // sendSelectedBtn.style.backgroundColor = '#cccccc';
+                            sendSelectedBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Send Selected (0 ready)`;
+                            sendSelectedBtn.title = 'No items are ready to send';
+                            
+                        } else if (analysis.sendableCount === analysis.total) {
+                            // All items are sendable - fully enabled
+                            sendSelectedBtn.disabled = false;
+                            sendSelectedBtn.style.opacity = '1';
+                            // sendSelectedBtn.style.backgroundColor = '#c41e3a';
+                            sendSelectedBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Send Selected (${analysis.sendableCount} ready)`;
+                            sendSelectedBtn.title = `Send ${analysis.sendableCount} items`;
+                            
+                        } else {
+                            // Mixed selection - partially enabled with warning
+                            sendSelectedBtn.disabled = false;
+                            sendSelectedBtn.style.opacity = '1';
+                            // sendSelectedBtn.style.backgroundColor = '#ff8c00'; // Orange warning color
+                            sendSelectedBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Send Selected (${analysis.sendableCount} of ${analysis.total} ready)`;
+                            
+                            // Create detailed tooltip
+                            const nonSendableBreakdown = [];
+                            if (analysis.counts.sent > 0) nonSendableBreakdown.push(`${analysis.counts.sent} already sent`);
+                            if (analysis.counts.review > 0) nonSendableBreakdown.push(`${analysis.counts.review} need review`);
+                            if (analysis.counts.draft > 0) nonSendableBreakdown.push(`${analysis.counts.draft} are drafts`);
+                            if (analysis.counts.pending > 0) nonSendableBreakdown.push(`${analysis.counts.pending} are pending`);
+                            if (analysis.counts.failed > 0) nonSendableBreakdown.push(`${analysis.counts.failed} have failed`);
+                            if (analysis.counts.cancelled > 0) nonSendableBreakdown.push(`${analysis.counts.cancelled} are cancelled`);
+                            
+                            sendSelectedBtn.title = `Will send ${analysis.sendableCount} items. ${analysis.nonSendableCount} will be skipped: ${nonSendableBreakdown.join(', ')}`;
+                        }
+                    }
                 }
             } else {
                 bulkActions.style.display = 'none';
@@ -8079,18 +8173,34 @@
             const selectedItems = Array.from(selectedQueueItems);
             if (selectedItems.length === 0) return;
 
-            if (confirm(`Send ${selectedItems.length} selected emails?`)) {
-                showLoadingOverlay(`Sending ${selectedItems.length} emails...`, true);
+            // Analyze selected items to provide smart confirmation
+            const analysis = analyzeSelectedItems();
+            
+            let confirmMessage = '';
+            if (analysis.sendableCount === 0) {
+                alert('No items are ready to send. Please select items with "Ready" status.');
+                return;
+            } else if (analysis.sendableCount === analysis.total) {
+                confirmMessage = `Send ${analysis.sendableCount} selected emails?`;
+            } else {
+                confirmMessage = `Send ${analysis.sendableCount} ready items? (${analysis.nonSendableCount} items will be skipped)`;
+            }
+
+            if (confirm(confirmMessage)) {
+                showLoadingOverlay(`Sending ${analysis.sendableCount} emails...`, true);
+
+                // Filter to only send items that are ready
+                const sendableItems = analysis.items.filter(item => item.status === 'ready');
 
                 // Process all sends and track completion
                 let completedCount = 0;
                 let hasErrors = false;
                 let successCount = 0;
+                let skippedCount = analysis.nonSendableCount;
 
-                selectedItems.forEach(itemId => {
-                    const item = aiQueue.find(i => i.id == itemId);
+                sendableItems.forEach(item => {
                     if (item) {
-                        fetch(API_BASE_URL + '/ai/queue/send/' + itemId, {
+                        fetch(API_BASE_URL + '/ai/queue/send/' + item.id, {
                             method: 'GET',
                             headers: {
                                 'Content-Type': 'application/json'
@@ -8111,33 +8221,67 @@
                             })
                             .finally(() => {
                                 completedCount++;
-                                selectedQueueItems.delete(itemId);
+                                selectedQueueItems.delete(item.id);
 
                                 // Only reload queue once when all sends are complete
-                                if (completedCount === selectedItems.length) {
+                                if (completedCount === sendableItems.length) {
                                     showLoadingOverlay('', false);
+                                    
+                                    // Create comprehensive result message
+                                    let resultMessage = '';
                                     if (hasErrors) {
                                         if (successCount > 0) {
-                                            alert(`${successCount} emails sent successfully. Some emails failed to send. Please check and try again.`);
+                                            resultMessage = `${successCount} emails sent successfully. Some emails failed to send.`;
                                         } else {
-                                            alert('All emails failed to send. Please check and try again.');
+                                            resultMessage = 'All emails failed to send. Please check and try again.';
                                         }
                                     } else {
-                                        alert(`${selectedItems.length} emails sent successfully!`);
+                                        resultMessage = `${successCount} emails sent successfully!`;
                                     }
+                                    
+                                    // Add skipped items info if any
+                                    if (skippedCount > 0) {
+                                        resultMessage += ` ${skippedCount} items were skipped (not ready to send).`;
+                                    }
+                                    
+                                    alert(resultMessage);
+                                    
                                     // Reload queue only once at the end
                                     loadAIQueue();
+                                    
+                                    // Clear all selections after successful operation
+                                    selectedQueueItems.clear();
+                                    
+                                    // Uncheck all visible checkboxes
+                                    setTimeout(() => {
+                                        const checkboxes = document.querySelectorAll('#aiQueueList input[type="checkbox"]');
+                                        checkboxes.forEach(checkbox => {
+                                            checkbox.checked = false;
+                                        });
+                                    }, 100); // Small delay to ensure queue is reloaded
+                                    
                                     updateBulkActionsVisibility();
                                 }
                             });
                     } else {
                         // If item not found in queue, still count as completed
                         completedCount++;
-                        selectedQueueItems.delete(itemId);
 
-                        if (completedCount === selectedItems.length) {
+                        if (completedCount === sendableItems.length) {
                             showLoadingOverlay('', false);
                             loadAIQueue();
+                            
+                            // Clear all selections after operation completes
+                            selectedQueueItems.clear();
+                            
+                            // Uncheck all visible checkboxes
+                            setTimeout(() => {
+                                const checkboxes = document.querySelectorAll('#aiQueueList input[type="checkbox"]');
+                                checkboxes.forEach(checkbox => {
+                                    checkbox.checked = false;
+                                });
+                            }, 100);
+                            
                             updateBulkActionsVisibility();
                         }
                     }
