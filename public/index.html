@@ -7407,6 +7407,9 @@
             const filterRow = element.closest('.ai-queue-filter-row');
             const filterLabel = filterRow.querySelector('.ai-queue-filter-label').textContent.toLowerCase();
 
+            // Clear all selected items when any filter is applied
+            selectedQueueItems.clear();
+
             // Handle Status filters (exclusive - only one can be active)
             if (filterLabel.includes('status')) {
                 filterRow.querySelectorAll('.ai-queue-filter-chip').forEach(chip => {
@@ -7444,6 +7447,15 @@
             console.log('AI Queue Filters:', aiQueueFilters);
 
             renderAIQueue();
+            
+            // After rendering, ensure all checkboxes are unchecked to reflect the cleared selection
+            setTimeout(() => {
+                const checkboxes = document.querySelectorAll('#aiQueueList input[type="checkbox"]');
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+            }, 0);
+            
             // Update bulk actions visibility to handle Send Selected button when filter changes
             updateBulkActionsVisibility();
         }
@@ -7999,7 +8011,7 @@
                                 if (!isBulk) {
                                     alert('Email deleted successfully!');
                                 }
-                                // Only reload queue for individual dismissals, not bulk
+                                // Only reload queue for individual deletes, not bulk
                                 if (!isBulk) {
                                     loadAIQueue();
                                 }
@@ -8137,8 +8149,8 @@
             const selectedItems = Array.from(selectedQueueItems);
             if (selectedItems.length === 0) return;
 
-            if (confirm(`Dismiss ${selectedItems.length} selected items?`)) {
-                showLoadingOverlay(`Dismissing ${selectedItems.length} items...`, true);
+            if (confirm(`Delete ${selectedItems.length} selected items?`)) {
+                showLoadingOverlay(`Deleting ${selectedItems.length} items...`, true);
 
                 // Process all deletions and track completion
                 let completedCount = 0;
@@ -8172,9 +8184,9 @@
                                 if (completedCount === selectedItems.length) {
                                     showLoadingOverlay('', false);
                                     if (hasErrors) {
-                                        alert('Some items failed to dismiss. Please check and try again.');
+                                        alert('Some items failed to delete. Please check and try again.');
                                     } else {
-                                        alert(`${selectedItems.length} items dismissed successfully!`);
+                                        alert(`${selectedItems.length} items deleted successfully!`);
                                     }
                                     // Reload queue only once at the end
                                     loadAIQueue();
