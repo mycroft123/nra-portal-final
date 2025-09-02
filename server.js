@@ -1409,11 +1409,28 @@ app.get('/api/ai/queue', requireAuth, async (req, res) => {
 
         const result = await query(selectQuery, queryParams);
 
-        // 2. Return the queue items
+        // Get total count for pagination
+        const countQuery = `
+            SELECT COUNT(*) as total 
+            FROM ai_queue 
+            WHERE ${whereConditions.join(' AND ')}
+        `;
+        const countResult = await query(countQuery, queryParams.slice(0, -2)); // Remove limit and offset params
+        const totalCount = parseInt(countResult.rows[0].total);
+
+        // 2. Return the queue items with pagination metadata
         res.json({
             success: true,
             queue: result.rows,
-            total: result.rows.length
+            pagination: {
+                currentPage: Math.floor(parseInt(offset) / parseInt(limit)) + 1,
+                pageSize: parseInt(limit),
+                totalItems: totalCount,
+                totalPages: Math.ceil(totalCount / parseInt(limit)),
+                hasMore: (parseInt(offset) + parseInt(limit)) < totalCount,
+                offset: parseInt(offset),
+                limit: parseInt(limit)
+            }
         });
     } catch (error) {
         console.error('Error fetching AI queue:', error);
