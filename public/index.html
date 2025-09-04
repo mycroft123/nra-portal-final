@@ -2047,7 +2047,6 @@
 
         /* AI Sentence - Normal state (no highlighting) */
         .ai-sentence {
-            display: inline;
             cursor: pointer;
             transition: all 0.2s;
             position: relative;
@@ -5422,7 +5421,9 @@
 
             // Toggle off the AI Edit and Reply Inline
             document.getElementById('aiModeToggle').checked = false;
+            document.getElementById('aiModeToggle').disabled = false;
             document.getElementById('aiInlineModeToggle').checked = false;
+            document.getElementById('aiInlineModeToggle').disabled = false;
 
             document.getElementById('toneSelector').value = 'professional'
 
@@ -5512,6 +5513,14 @@
                             // Update AI Edit toggles based on content
                             updateAIEditTogglesState();
                         }, 500);
+
+                        const htmlContent = window.editorInstance.html.get();
+                        console.log(htmlContent, 'htmlContent22222222222222222222222222222222222222222');
+                        const textContent = htmlContent.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '');
+                        const sendBtn = document.getElementById('sendEmailBtn');
+                        if (sendBtn) {
+                            sendBtn.disabled = !textContent.trim();
+                        }
                     },
                     'blur': function () {
                         if (!isAIEditor && emailDraftData && emailDraftData.draft) {
@@ -5520,12 +5529,12 @@
                             emailDraftData.draft.body = textContent;
                         }
                     },
-                    'initialized': function () {
-                        console.log('Froala Editor ready with enhanced toolbar!');
+'initialized': function () {
+    console.log('Froala Editor ready with enhanced toolbar!');
                         // enableAIEditingFeatures();
                         // Initial check for AI Edit toggles state
                         // updateAIEditTogglesState();
-                    }
+}
                 }
             });
         }
@@ -5538,7 +5547,7 @@
             aiInlineModeToggle.disabled = true;
 
             console.log(selectedEmail, 'selectedEmail----------------------------------->>>>>>>');
-            
+
             if (!selectedEmail) {
                 alert('No email selected for reply.');
                 return;
@@ -5599,7 +5608,7 @@
 
                 if (data.success) {
                     if (!selectedEmail) {
-                        
+
                     }
                     // Create draft data structure
                     emailDraftData = {
@@ -5732,7 +5741,7 @@
                     generateBtn.style.display = 'none'
                     document.getElementById('draftSection').style.display = 'block';
                     document.getElementById('regenerateBtn').style.display = 'inline-flex';
-                    
+
                     // Update AI Edit toggles state after content is generated
                     updateAIEditTogglesState();
                     document.getElementById('sendEmailBtn').disabled = false;
@@ -5948,41 +5957,70 @@
                     toggleInlineAIMode(aiInlineModeToggle)
                 }
 
-                const viewer = document.querySelector("#draftContent > div.fr-wrapper > div")
-                console.log(viewer, 'viewer-----------------------------------');
-
-                emailDraftData.draft = viewer.innerHTML
-                htmlData = convertEmailToHTML(emailDraftData.draft)
-                document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = htmlData
+                addConvertToSmartBoxBySentences()
             } else {
-                const htmlElement = document.getElementById('emailEditor');
+                removeConvertToSmartBoxBySentences()
+            }
+        }
+ 
+function addConvertToSmartBoxBySentences() {
+    const editor = window.editorInstance;
+    const paragraphs = editor.el.querySelectorAll('p');
 
-                const normalText = convertHTMLToEmail(htmlElement)
-                emailDraftData.draft = normalText
-                document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = normalText
+    paragraphs.forEach(p => {
+        const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, null, false);
+        const textNodes = [];
+
+        // First, collect all text nodes (important: don't modify DOM while walking it)
+        while (walker.nextNode()) {
+            const textNode = walker.currentNode;
+            if (textNode.textContent.trim()) {
+                textNodes.push(textNode);
             }
         }
 
-        // function toggleInlineAIMode(checkbox) {
-        //     const aiModeToggle = document.getElementById('aiModeToggle')
+        // Process each text node
+        textNodes.forEach(textNode => {
+            const parent = textNode.parentNode;
+            const sentences = textNode.textContent.match(/[^.!?]+[.!?]*/g);
 
-        //     aiModeEnabled = checkbox.checked;
-        //     if (aiModeEnabled) {
-        //         if (aiModeToggle.checked) {
-        //             aiModeToggle.checked = false
-        //             toggleInlineAIMode(aiModeToggle)
-        //         }
+            if (!sentences) return;
 
-        //         showInlineReply1()
-        //     } else {
-        //         const htmlElement = document.getElementById('emailEditor');
+            sentences.forEach(sentence => {
+                const span = document.createElement('span');
+                span.classList.add('ai-sentence');
+                // span.textContent = trimmed + ' ';
+                span.textContent = sentence;
+                span.addEventListener('click', () => convertToSmartBox(span));
+                parent.insertBefore(span, textNode);
+            });
 
-        //         const normalText = convertHTMLToEmail(htmlElement)
-        //         emailDraftData.draft = normalText
-        //         document.querySelector("#draftContent > div.fr-wrapper > div").innerText = normalText
-        //     }
-        // }
+            // Remove original text node after inserting all sentence spans
+            parent.removeChild(textNode);
+        });
+    });
+}
 
+function removeConvertToSmartBoxBySentences() {
+    const editor = window.editorInstance;
+    const spans = editor.el.querySelectorAll('span.ai-sentence');
+
+    spans.forEach(span => {
+        const parent = span.parentNode;
+        // Replace span with its child nodes (preserves formatting like <br>, inline elements)
+        while (span.firstChild) {
+            parent.insertBefore(span.firstChild, span);
+        }
+        parent.removeChild(span);
+    });
+}
+
+
+        function handleParagraphClick(event) {
+            convertToSmartBox(event.currentTarget);
+        }
+    
+        
         function toggleInlineAIMode(checkbox) {
             const aiModeToggle = document.getElementById('aiModeToggle')
 
@@ -5993,30 +6031,47 @@
                     aiModeToggle.checked = false
                     toggleInlineAIMode(aiModeToggle)
                 }
-
-                // showInlineReply1()  
-                const viewer = document.querySelector("#draftContent > div.fr-wrapper > div")
-                emailDraftData.draft = viewer.innerHTML
-                htmlData = convertEmailToHTML1(emailDraftData.draft)
-                document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = htmlData
+                
+                addConvertToSmartBoxByParagraphs()
             } else {
-                const htmlElement = document.getElementById('emailEditor');
-
-                const normalText = convertHTMLToEmail(htmlElement)
-                emailDraftData.draft = normalText
-                document.querySelector("#draftContent > div.fr-wrapper > div").innerHTML = normalText
+                removeConvertToSmartBoxByParagraphs()
             }
         }
+
+        function addConvertToSmartBoxByParagraphs() {
+            if (!window.editorInstance) return;
+
+            const editor = window.editorInstance;
+            const paragraphs = editor.el.querySelectorAll('p');
+            paragraphs.forEach(p => {
+                p.classList.remove('ai-sentence')
+                p.classList.add('ai-sentence')
+                p.removeEventListener('click', handleParagraphClick);
+                p.addEventListener('click', handleParagraphClick);
+            });
+        }
+
+        function removeConvertToSmartBoxByParagraphs() {
+            if (!window.editorInstance) return;
+
+            const editor = window.editorInstance;
+            const paragraphs = editor.el.querySelectorAll('p');
+            paragraphs.forEach(p => {
+                p.removeAttribute('class')
+                p.removeEventListener('click', handleParagraphClick);
+            });
+        }
+
 
         // Function to update AI Edit toggles state based on editor content
         function updateAIEditTogglesState() {
             const aiModeToggle = document.getElementById('aiModeToggle');
             const aiInlineModeToggle = document.getElementById('aiInlineModeToggle');
-            
+
             if (!aiModeToggle || !aiInlineModeToggle) return;
-            
+
             let hasContent = false;
-            
+
             // Check content in different editors
             if (window.editorInstance) {
                 // Froala editor content
@@ -6030,7 +6085,7 @@
                     const textContent = emailEditor.textContent || emailEditor.innerText || '';
                     hasContent = textContent.trim().length > 0;
                 }
-                
+
                 // Check draft content fallback
                 if (!hasContent) {
                     const draftContent = document.getElementById('draftContent');
@@ -6040,11 +6095,11 @@
                     }
                 }
             }
-            
+
             // Enable/disable toggles based on content
             aiModeToggle.disabled = !hasContent;
             aiInlineModeToggle.disabled = !hasContent;
-            
+
             // If disabled and currently checked, uncheck them
             if (!hasContent) {
                 if (aiModeToggle.checked) {
@@ -6243,29 +6298,29 @@
             // Determine if this is a compose or reply based on modal context
             const modalTitle = document.getElementById('composeModalTitle').textContent;
             const isReply = modalTitle.includes('Reply with AI') || window.currentComposeType === 'REPLY_WITH_AI';
-            
+
             if(type === 'REGENERATE_NORMAL') {
                 // Show spinner only on the normal regenerate button
                 regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerating.....';
                 regenerateBtn.disabled = true;
-                
+
                 if (isReply) {
                     await generateAIReply();
                 } else {
                     await generateEmailDraft('REGENERATE_EMAIL');
                 }
-                
+
                 // Reset normal button
                 regenerateBtn.innerHTML = originalHTML;
                 regenerateBtn.disabled = false;
-                
+
             } else if(type === 'REGENERATE_INLINE') {
                 // Show spinner only on the inline regenerate button
                 regenerateInlineBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Regenerating Inline.....';
                 regenerateInlineBtn.disabled = true;
-                
+
                 await generateReplyInline('REGENERATE_EMAIL');
-                
+
                 // Reset inline button
                 regenerateInlineBtn.innerHTML = originalInlineHTML;
                 regenerateInlineBtn.disabled = false;
@@ -6877,7 +6932,7 @@
             const content = element.innerHTML;
 
             const wrapper = document.createElement('span');
-            wrapper.className = 'smart-box-wrapper';
+            wrapper.className = 'smart-box-wrapper active';
             wrapper.dataset.sentenceId = sentenceId;
 
             const smartBox = document.createElement('div');
@@ -6911,6 +6966,7 @@
                 );
 
                 if (isReallyLeaving) {
+                    wrapper.classList.remove('active')
                     hoverTimeout = setTimeout(() => {
                         if (activeSmartBox === wrapper && !wrapper.contains(document.activeElement) && wrapper.dataset.loading !== "true") {
                             convertBackToSentence(wrapper, sentenceId);
@@ -6928,12 +6984,23 @@
 
         function convertBackToSentence(wrapper, sentenceId) {
             const content = wrapper.querySelector('.smart-box-content').innerHTML;
+            let sentence = null
 
-            const sentence = document.createElement('span');
-            sentence.className = 'ai-sentence';
-            sentence.innerHTML = content;
-            sentence.dataset.id = sentenceId;
-            sentence.onclick = function () { convertToSmartBox(this); };
+            const aiModeToggle = document.getElementById('aiModeToggle')
+            if(aiModeToggle.checked) {
+                sentence = document.createElement('span');
+                sentence.classList.add('ai-sentence');
+                sentence.innerHTML = content;
+                sentence.onclick = function () { convertToSmartBox(this); };
+            }
+            else {
+                sentence = document.createElement('p');
+                sentence.setAttribute('style', 'margin-bottom: 16px;');
+                sentence.classList.add('ai-sentence');
+                sentence.innerHTML = content;
+                // sentence.dataset.id = sentenceId;
+                sentence.onclick = function () { convertToSmartBox(this); };
+            }
 
             wrapper.parentNode.replaceChild(sentence, wrapper);
             activeSmartBox = null;
@@ -7285,7 +7352,7 @@
 
         function handleKeyDown(e) {
             if (e.key === 'Enter') {
-                e.preventDefault();
+                    e.preventDefault();
                 document.execCommand('insertHTML', false, '</div><div class="add-line-container"><button class="add-line-btn" onclick="addNewLine(this)">+</button></div><div class="paragraph" contenteditable="true">');
             }
         }
@@ -8513,16 +8580,8 @@
             const aiModeToggle = document.getElementById('aiModeToggle')
             const aiInlineModeToggle = document.getElementById('aiInlineModeToggle')
 
-            let contentHtml = '';
-            let currentContent = ''
-            if (aiInlineModeToggle.checked || aiModeToggle.checked) {
-                const htmlElement = document.getElementById('emailEditor');
-                contentHtml = htmlElement.innerHTML;
-                currentContent = convertHTMLToEmail(htmlElement)
-            } else {
-                currentContent = getCurrentEditorContent()
-                contentHtml = convertEmailToHTML1(currentContent)
-            }
+            let contentHtml = window.editorInstance.html.get()
+            let currentContent = window.editorInstance.html.get()
 
             const promptElement = document.getElementById('composePrompt');
             const toneElement = document.getElementById('toneSelector');
