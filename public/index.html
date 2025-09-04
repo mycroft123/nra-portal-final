@@ -1681,14 +1681,14 @@
 
         /* Inline reply styling */
         .inline-reply-intro {
-            margin-bottom: 20px;
+            /* margin-bottom: 20px; */
             font-weight: 500;
         }
 
         .inline-reply-response {
             /* color: #6b7280; */
             /* font-style: italic; */
-            margin-bottom: 8px;
+            /* margin-bottom: 8px; */
             /* padding: 8px 12px; */
             /* background-color: #f9fafb; */
             /* border-radius: 4px; */
@@ -1703,7 +1703,7 @@
         }
 
         .inline-reply-closing {
-            margin-top: 20px;
+            /* margin-top: 20px; */
             font-weight: 500;
         }
 
@@ -2511,9 +2511,9 @@
         }
 
         .ai-queue-loading {
-            background: linear-gradient(90deg, 
-                rgba(196, 30, 58, 0.02), 
-                rgba(196, 30, 58, 0.08), 
+            background: linear-gradient(90deg,
+                    rgba(196, 30, 58, 0.02),
+                    rgba(196, 30, 58, 0.08),
                 rgba(196, 30, 58, 0.02)
             );
             animation: loadingPulse 2s ease-in-out infinite;
@@ -2521,9 +2521,9 @@
         }
 
         .ai-queue-end {
-            background: linear-gradient(90deg, 
-                rgba(40, 167, 69, 0.02), 
-                rgba(40, 167, 69, 0.08), 
+            background: linear-gradient(90deg,
+                    rgba(40, 167, 69, 0.02),
+                    rgba(40, 167, 69, 0.08),
                 rgba(40, 167, 69, 0.02)
             );
             border: 1px solid rgba(40, 167, 69, 0.1);
@@ -2531,11 +2531,11 @@
 
         @keyframes loadingPulse {
             0%, 100% { 
-                opacity: 0.8; 
+                opacity: 0.8;
                 transform: scale(1);
             }
-            50% { 
-                opacity: 1; 
+            50% {
+                opacity: 1;
                 transform: scale(1.01);
             }
         }
@@ -3216,7 +3216,7 @@
                             review.</p>
                     </div>
                 </div>
-                
+
                 <!-- Infinite scroll loading indicator -->
                 <div class="ai-queue-loading" id="aiQueueLoadingIndicator" style="display: none;">
                     <div class="">
@@ -3224,7 +3224,7 @@
                         <span>Loading more items...</span>
                     </div>
                 </div>
-                
+
                 <!-- End of results indicator -->
                 <div class="ai-queue-end" id="aiQueueEndIndicator" style="display: none;">
                     <div class="end-message">
@@ -5481,6 +5481,13 @@
                 pasteAllowedStyleProps: ['color', 'font-size', 'background-color', 'font-family', 'text-align'],
                 pasteDeniedTags: ['style', 'script', 'iframe', 'object', 'embed', 'link', 'meta'],
 
+                htmlAllowedTags: ['.*'],
+                htmlAllowedAttrs: ['.*'],
+                htmlRemoveTags: [],
+                pastePlain: false,
+                pasteDeniedAttrs: [],
+                pasteDeniedTags: [],
+
                 fontFamily: {
                     "Arial,Helvetica,sans-serif": 'Arial',
                     "Georgia,serif": 'Georgia',
@@ -5509,7 +5516,7 @@
                                     sendBtn.disabled = !textContent.trim();
                                 }
                             }
-                            
+
                             // Update AI Edit toggles based on content
                             updateAIEditTogglesState();
                         }, 500);
@@ -5529,12 +5536,12 @@
                             emailDraftData.draft.body = textContent;
                         }
                     },
-'initialized': function () {
-    console.log('Froala Editor ready with enhanced toolbar!');
+                    'initialized': function () {
+                        console.log('Froala Editor ready with enhanced toolbar!');
                         // enableAIEditingFeatures();
                         // Initial check for AI Edit toggles state
                         // updateAIEditTogglesState();
-}
+                    }
                 }
             });
         }
@@ -5962,65 +5969,98 @@
                 removeConvertToSmartBoxBySentences()
             }
         }
- 
-function addConvertToSmartBoxBySentences() {
-    const editor = window.editorInstance;
-    const paragraphs = editor.el.querySelectorAll('p');
 
-    paragraphs.forEach(p => {
-        const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, null, false);
-        const textNodes = [];
+        function addConvertToSmartBoxBySentences() {
+            const editor = window.editorInstance;
+            const paragraphs = editor.el.querySelectorAll('p');
 
-        // First, collect all text nodes (important: don't modify DOM while walking it)
-        while (walker.nextNode()) {
-            const textNode = walker.currentNode;
-            if (textNode.textContent.trim()) {
-                textNodes.push(textNode);
-            }
-        }
+            paragraphs.forEach(p => {
+                const frag = document.createDocumentFragment();
 
-        // Process each text node
-        textNodes.forEach(textNode => {
-            const parent = textNode.parentNode;
-            const sentences = textNode.textContent.match(/[^.!?]+[.!?]*/g);
+                let sentenceNodes = []; 
+                let currentSentenceText = ''; 
 
-            if (!sentences) return;
+                function wrapSentence() {
+                    if (sentenceNodes.length === 0) return;
 
-            sentences.forEach(sentence => {
-                const span = document.createElement('span');
-                span.classList.add('ai-sentence');
-                // span.textContent = trimmed + ' ';
-                span.textContent = sentence;
-                span.addEventListener('click', () => convertToSmartBox(span));
-                parent.insertBefore(span, textNode);
+                    const span = document.createElement('span');
+                    span.classList.add('ai-sentence');
+
+                    sentenceNodes.forEach(node => span.appendChild(node));
+                    span.removeEventListener('click', handleParagraphClick);
+                    span.addEventListener('click', handleParagraphClick);
+
+                    frag.appendChild(span);
+
+                    sentenceNodes = [];
+                    currentSentenceText = '';
+                }
+
+                let nodes = Array.from(p.childNodes);
+
+                nodes.forEach(node => {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        const parts = node.textContent.split(/(\.[\s]*)/);
+
+                        for (let i = 0; i < parts.length; i++) {
+                            const part = parts[i];
+
+                            if (part === undefined || part === '') continue;
+
+                            if (i % 2 === 0) {
+                                if (part.trim() !== '') {
+                                    const textNode = document.createTextNode(part);
+                                    sentenceNodes.push(textNode);
+                                    currentSentenceText += part;
+                                }
+                            } else {
+                                const textNode = document.createTextNode(part);
+                                sentenceNodes.push(textNode);
+                                currentSentenceText += part;
+
+                                wrapSentence();
+                            }
+                        }
+                    } else {
+                        sentenceNodes.push(node);
+                        currentSentenceText += node.textContent || '';
+                    }
+                });
+
+                if (sentenceNodes.length > 0) {
+                    wrapSentence();
+                }
+
+                p.innerHTML = '';
+                p.appendChild(frag);
             });
-
-            // Remove original text node after inserting all sentence spans
-            parent.removeChild(textNode);
-        });
-    });
-}
-
-function removeConvertToSmartBoxBySentences() {
-    const editor = window.editorInstance;
-    const spans = editor.el.querySelectorAll('span.ai-sentence');
-
-    spans.forEach(span => {
-        const parent = span.parentNode;
-        // Replace span with its child nodes (preserves formatting like <br>, inline elements)
-        while (span.firstChild) {
-            parent.insertBefore(span.firstChild, span);
         }
-        parent.removeChild(span);
-    });
-}
+
+        function removeConvertToSmartBoxBySentences() { 
+            const editor = window.editorInstance;
+            const paragraphs = editor.el.querySelectorAll('p');
+
+            paragraphs.forEach(p => {
+                const sentenceSpans = p.querySelectorAll('span.ai-sentence');
+
+                sentenceSpans.forEach(span => {
+                    span.removeEventListener('click', handleParagraphClick);
+                    
+                    while (span.firstChild) {
+                        p.insertBefore(span.firstChild, span);
+                    }
+
+                    span.remove();
+                });
+            });
+        }
 
 
         function handleParagraphClick(event) {
             convertToSmartBox(event.currentTarget);
         }
-    
-        
+
+
         function toggleInlineAIMode(checkbox) {
             const aiModeToggle = document.getElementById('aiModeToggle')
 
@@ -6029,9 +6069,9 @@ function removeConvertToSmartBoxBySentences() {
             if (aiModeEnabled) {
                 if (aiModeToggle.checked) {
                     aiModeToggle.checked = false
-                    toggleInlineAIMode(aiModeToggle)
+                    toggleAIMode(aiModeToggle)
                 }
-                
+
                 addConvertToSmartBoxByParagraphs()
             } else {
                 removeConvertToSmartBoxByParagraphs()
@@ -6938,13 +6978,13 @@ function removeConvertToSmartBoxBySentences() {
             const smartBox = document.createElement('div');
             smartBox.className = 'smart-box';
             smartBox.innerHTML = `
-        <span class="smart-box-label">AI Sentence</span>
+        <span class="smart-box-label" contenteditable="false">AI Sentence</span>
         <div class="smart-box-content" contenteditable="true">${content}</div>
         <div class="smart-box-actions">
-            <button class="micro-action" onclick="regenerateSentence(this, '${sentenceId}')">↻ Regen</button>
-            <button class="micro-action" onclick="expandSentence(this)">+ Expand</button>
-            <button class="micro-action" onclick="shortenSentence(this)">− Short</button>
-            <button class="micro-action" onclick="deleteSentence(this)">X Delete</button>
+            <button class="micro-action" onclick="regenerateSentence(this, '${sentenceId}')" role="button" contenteditable="false">↻ Regen</button>
+            <button class="micro-action" onclick="expandSentence(this)" role="button" contenteditable="false">+ Expand</button>
+            <button class="micro-action" onclick="shortenSentence(this)" role="button" contenteditable="false">− Short</button>
+            <button class="micro-action" onclick="deleteSentence(this)" role="button" contenteditable="false">X Delete</button>
         </div>
     `;
 
@@ -7352,7 +7392,7 @@ function removeConvertToSmartBoxBySentences() {
 
         function handleKeyDown(e) {
             if (e.key === 'Enter') {
-                    e.preventDefault();
+                e.preventDefault();
                 document.execCommand('insertHTML', false, '</div><div class="add-line-container"><button class="add-line-btn" onclick="addNewLine(this)">+</button></div><div class="paragraph" contenteditable="true">');
             }
         }
@@ -7472,9 +7512,9 @@ function removeConvertToSmartBoxBySentences() {
         function updateAIQueueCount() {
             const currentCount = aiQueue.length;
             const totalCount = infiniteScrollState.totalItems;
-            
+
             document.getElementById('aiQueueCount').textContent = currentCount;
-            
+
             if (document.getElementById('aiQueueTotal')) {
                 // Show loaded vs total for infinite scroll
                 if (totalCount > 0 && totalCount > currentCount) {
@@ -7624,7 +7664,7 @@ function removeConvertToSmartBoxBySentences() {
 
             // Reset infinite scroll and reload with new filters
             loadMoreAIQueue(true);
-            
+
             // After rendering, ensure all checkboxes are unchecked to reflect the cleared selection
             setTimeout(() => {
                 const checkboxes = document.querySelectorAll('#aiQueueList input[type="checkbox"]');
@@ -7632,7 +7672,7 @@ function removeConvertToSmartBoxBySentences() {
                     checkbox.checked = false;
                 });
             }, 0);
-            
+
             // Update bulk actions visibility to handle Send Selected button when filter changes
             updateBulkActionsVisibility();
         }
@@ -8114,7 +8154,7 @@ function removeConvertToSmartBoxBySentences() {
 
                 // Add intro
                 if (inlineReply.intro) {
-                    htmlContent += `<div class="inline-reply-intro">${inlineReply.intro}</div>`;
+                    htmlContent += `<p style="margin-bottom: 16px" class="inline-reply-intro">${inlineReply.intro}</p>`;
                 }
 
                 // Add original email content with inline responses
@@ -8123,13 +8163,13 @@ function removeConvertToSmartBoxBySentences() {
                         // Add original text in gray
                         htmlContent += `<div class="inline-reply-original">${item.originalText}</div>`;
                         // Add inline response
-                        htmlContent += `<div class="inline-reply-response">${item.response}</div>`;
+                        htmlContent += `<p style="margin-bottom: 16px" class="inline-reply-response">${item.response}</p>`;
                     });
                 }
 
                 // Add closing
                 if (inlineReply.closing) {
-                    htmlContent += `<div class="inline-reply-closing">${inlineReply.closing}</div>`;
+                    htmlContent += `<p style="margin-bottom: 16px" class="inline-reply-closing">${inlineReply.closing}</p>`;
                 }
 
                 // Update the editor with the inline reply
@@ -8277,15 +8317,15 @@ function removeConvertToSmartBoxBySentences() {
                 console.error('bulkActions element not found');
                 return;
             }
-            
+
             // Note: We don't need selectedCount element anymore since we update button innerHTML directly
-            
+
             const sendSelectedBtn = bulkActions.querySelector('.bulk-send-btn');
             const deleteSelectedBtn = bulkActions.querySelector('.bulk-dismiss-btn');
 
             if (selectedQueueItems.size > 0) {
                 bulkActions.style.display = 'flex';
-                
+
                 // Analyze selected items to determine button states
                 const analysis = analyzeSelectedItems();
 
@@ -8298,13 +8338,13 @@ function removeConvertToSmartBoxBySentences() {
 
                 // Configure Send Selected button with smart logic
                 if (sendSelectedBtn) {
-                    
+
                     // Hide Send Selected button when "sent" filter is active (existing logic)
                     if (aiQueueFilters.status === 'sent') {
                         sendSelectedBtn.style.display = 'none';
                     } else {
                         sendSelectedBtn.style.display = 'flex';
-                        
+
                         if (analysis.sendableCount === 0) {
                             // No sendable items - disable button
                             sendSelectedBtn.disabled = true;
@@ -8312,7 +8352,7 @@ function removeConvertToSmartBoxBySentences() {
                             // sendSelectedBtn.style.backgroundColor = '#cccccc';
                             sendSelectedBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Send Selected (0 ready)`;
                             sendSelectedBtn.title = 'No items are ready to send';
-                            
+
                         } else if (analysis.sendableCount === analysis.total) {
                             // All items are sendable - fully enabled
                             sendSelectedBtn.disabled = false;
@@ -8320,14 +8360,14 @@ function removeConvertToSmartBoxBySentences() {
                             // sendSelectedBtn.style.backgroundColor = '#c41e3a';
                             sendSelectedBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Send Selected (${analysis.sendableCount} ready)`;
                             sendSelectedBtn.title = `Send ${analysis.sendableCount} items`;
-                            
+
                         } else {
                             // Mixed selection - partially enabled with warning
                             sendSelectedBtn.disabled = false;
                             sendSelectedBtn.style.opacity = '1';
                             // sendSelectedBtn.style.backgroundColor = '#ff8c00'; // Orange warning color
                             sendSelectedBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Send Selected (${analysis.sendableCount} of ${analysis.total} ready)`;
-                            
+
                             // Create detailed tooltip
                             const nonSendableBreakdown = [];
                             if (analysis.counts.sent > 0) nonSendableBreakdown.push(`${analysis.counts.sent} already sent`);
@@ -8336,7 +8376,7 @@ function removeConvertToSmartBoxBySentences() {
                             if (analysis.counts.pending > 0) nonSendableBreakdown.push(`${analysis.counts.pending} are pending`);
                             if (analysis.counts.failed > 0) nonSendableBreakdown.push(`${analysis.counts.failed} have failed`);
                             if (analysis.counts.cancelled > 0) nonSendableBreakdown.push(`${analysis.counts.cancelled} are cancelled`);
-                            
+
                             sendSelectedBtn.title = `Will send ${analysis.sendableCount} items. ${analysis.nonSendableCount} will be skipped: ${nonSendableBreakdown.join(', ')}`;
                         }
                     }
@@ -8352,7 +8392,7 @@ function removeConvertToSmartBoxBySentences() {
 
             // Analyze selected items to provide smart confirmation
             const analysis = analyzeSelectedItems();
-            
+
             let confirmMessage = '';
             if (analysis.sendableCount === 0) {
                 alert('No items are ready to send. Please select items with "Ready" status.');
@@ -8403,7 +8443,7 @@ function removeConvertToSmartBoxBySentences() {
                                 // Only reload queue once when all sends are complete
                                 if (completedCount === sendableItems.length) {
                                     showLoadingOverlay('', false);
-                                    
+
                                     // Create comprehensive result message
                                     let resultMessage = '';
                                     if (hasErrors) {
@@ -8415,20 +8455,20 @@ function removeConvertToSmartBoxBySentences() {
                                     } else {
                                         resultMessage = `${successCount} emails sent successfully!`;
                                     }
-                                    
+
                                     // Add skipped items info if any
                                     if (skippedCount > 0) {
                                         resultMessage += ` ${skippedCount} items were skipped (not ready to send).`;
                                     }
-                                    
+
                                     alert(resultMessage);
-                                    
+
                                     // Reload queue only once at the end
                                     loadAIQueue();
-                                    
+
                                     // Clear all selections after successful operation
                                     selectedQueueItems.clear();
-                                    
+
                                     // Uncheck all visible checkboxes
                                     setTimeout(() => {
                                         const checkboxes = document.querySelectorAll('#aiQueueList input[type="checkbox"]');
@@ -8436,7 +8476,7 @@ function removeConvertToSmartBoxBySentences() {
                                             checkbox.checked = false;
                                         });
                                     }, 100); // Small delay to ensure queue is reloaded
-                                    
+
                                     updateBulkActionsVisibility();
                                 }
                             });
@@ -8447,10 +8487,10 @@ function removeConvertToSmartBoxBySentences() {
                         if (completedCount === sendableItems.length) {
                             showLoadingOverlay('', false);
                             loadAIQueue();
-                            
+
                             // Clear all selections after operation completes
                             selectedQueueItems.clear();
-                            
+
                             // Uncheck all visible checkboxes
                             setTimeout(() => {
                                 const checkboxes = document.querySelectorAll('#aiQueueList input[type="checkbox"]');
@@ -8458,7 +8498,7 @@ function removeConvertToSmartBoxBySentences() {
                                     checkbox.checked = false;
                                 });
                             }, 100);
-                            
+
                             updateBulkActionsVisibility();
                         }
                     }
@@ -8832,7 +8872,7 @@ function removeConvertToSmartBoxBySentences() {
                                 originalEmailData = null;
                             }
                         }
-                        
+
                         return {
                             id: item.id,
                             type: item.type,
@@ -8868,7 +8908,7 @@ function removeConvertToSmartBoxBySentences() {
                     }
 
                     updateAIQueueCount();
-                    
+
                     if (document.getElementById('ai-queueView').style.display !== 'none') {
                         renderAIQueue();
                     }
@@ -8896,23 +8936,23 @@ function removeConvertToSmartBoxBySentences() {
         let scrollTimeout;
         function setupInfiniteScroll() {
             const aiQueueView = document.getElementById('ai-queueView');
-            
+
             if (!aiQueueView) return;
-            
+
             aiQueueView.addEventListener('scroll', () => {
                 clearTimeout(scrollTimeout);
                 scrollTimeout = setTimeout(() => {
                     const scrollTop = aiQueueView.scrollTop;
                     const scrollHeight = aiQueueView.scrollHeight;
                     const clientHeight = aiQueueView.clientHeight;
-                    
+
                     // Check if user is near the bottom
                     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-                    
-                    if (distanceFromBottom < INFINITE_SCROLL_CONFIG.scrollThreshold && 
-                        !infiniteScrollState.isLoading && 
+
+                    if (distanceFromBottom < INFINITE_SCROLL_CONFIG.scrollThreshold &&
+                        !infiniteScrollState.isLoading &&
                         infiniteScrollState.hasMore) {
-                        
+
                         loadMoreAIQueue(false);
                     }
                 }, INFINITE_SCROLL_CONFIG.loadingDelay);
@@ -8923,14 +8963,14 @@ function removeConvertToSmartBoxBySentences() {
         function updateInfiniteScrollIndicators() {
             const loadingIndicator = document.getElementById('aiQueueLoadingIndicator');
             const endIndicator = document.getElementById('aiQueueEndIndicator');
-            
+
             console.log('Updating indicators:', {
                 isLoading: infiniteScrollState.isLoading,
                 isInitialLoad: infiniteScrollState.isInitialLoad,
                 hasMore: infiniteScrollState.hasMore,
                 queueLength: aiQueue.length
             });
-            
+
             if (infiniteScrollState.isLoading && !infiniteScrollState.isInitialLoad) {
                 console.log('Showing loading indicator');
                 loadingIndicator.style.display = 'block';
@@ -8950,16 +8990,16 @@ function removeConvertToSmartBoxBySentences() {
         window.testLoadingIndicator = function() {
             const loadingIndicator = document.getElementById('aiQueueLoadingIndicator');
             const endIndicator = document.getElementById('aiQueueEndIndicator');
-            
+
             console.log('Testing loading indicator...');
             loadingIndicator.style.display = 'block';
             endIndicator.style.display = 'none';
-            
+
             setTimeout(() => {
                 loadingIndicator.style.display = 'none';
                 endIndicator.style.display = 'block';
                 console.log('Switched to end indicator');
-                
+
                 setTimeout(() => {
                     endIndicator.style.display = 'none';
                     console.log('Hidden all indicators');
