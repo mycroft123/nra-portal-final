@@ -8620,8 +8620,20 @@
             const aiModeToggle = document.getElementById('aiModeToggle')
             const aiInlineModeToggle = document.getElementById('aiInlineModeToggle')
 
-            let contentHtml = window.editorInstance.html.get()
-            let currentContent = window.editorInstance.html.get()
+            let currentContent = ''
+            let contentHtml = ''
+            if(aiModeToggle.checked ){
+                contentHtml = window.editorInstance.html.get()
+                removeConvertToSmartBoxBySentences()
+                currentContent = window.editorInstance.html.get()
+            } else if(aiInlineModeToggle.checked){
+                contentHtml = window.editorInstance.html.get()
+                removeConvertToSmartBoxByParagraphs()
+                currentContent = window.editorInstance.html.get()
+            } else {
+                contentHtml = window.editorInstance.html.get()
+                currentContent = window.editorInstance.html.get()
+            }
 
             const promptElement = document.getElementById('composePrompt');
             const toneElement = document.getElementById('toneSelector');
