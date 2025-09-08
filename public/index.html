@@ -1541,6 +1541,7 @@
             padding: 20px;
             flex: 1;
             overflow-y: auto;
+            min-height: 0;
         }
 
         .compose-input-section {
@@ -5275,6 +5276,14 @@
                 composeInputSection.style.display = 'block';
                 composeToneSection.style.display = 'block';
 
+                // Show the draft section immediately so users can write manually
+                document.getElementById('draftSection').style.display = 'block';
+
+                // Initialize the Froala editor so users can start writing immediately
+                setTimeout(() => {
+                    initializeEditor();
+                }, 100);
+
                 // Show Generate Draft and Regenerate buttons in compose mode
                 document.querySelector('.generate-btn').style.display = 'inline-flex';
                 regenerateBtn.innerHTML = `<i class="fas fa-redo-alt"></i> Regenerate`
@@ -5314,15 +5323,14 @@
             const modalHeader = composeModal.querySelector(".compose-modal-header");
             const modalBody = composeModal.querySelector(".compose-modal-body");
 
-            // Clone the email content
+            // Clone the email content (the thread)
             const emailContentClone = cloneEmailContent();
 
-            // Insert the clone after the header
-            modalHeader.insertAdjacentElement('afterend', emailContentClone);
+            // Insert the modal body (reply editor) first, right after the header
+            modalHeader.insertAdjacentElement('afterend', modalBody);
 
-            if (modalBody.firstElementChild) modalBody.firstElementChild.remove();
-            // Append the modal body inside the clone
-            emailContentClone.appendChild(modalBody);
+            // Insert the email thread clone at the end inside the modal body
+            modalBody.appendChild(emailContentClone);
         }
 
         function cloneEmailContent() {
@@ -5700,16 +5708,11 @@
             const prompt = document.getElementById('composePrompt').value.trim();
             const tone = document.getElementById('toneSelector').value;
 
-            if (!prompt) {
-                alert('Please describe what you want to communicate.');
-                if (window.editorInstance) {
-                    window.editorInstance.html.set('');
-                } else {
-                    const draftContent = document.getElementById('draftContent');
-                    if (draftContent) {
-                        draftContent.innerHTML = '';
-                    }
-                }
+            // Allow generating without prompt - users can write emails manually
+            if (!prompt && type !== 'REGENERATE_EMAIL') {
+                // If no prompt is provided, just enable the editor for manual writing
+                const draftSection = document.getElementById('draftSection');
+                draftSection.style.display = 'block';
                 updateAIEditTogglesState();
                 return;
             }
@@ -6375,28 +6378,11 @@
             const modalTitle = document.getElementById('composeModalTitle').textContent;
             const isCompose = modalTitle.includes('Compose with AI') || window.currentComposeType === 'COMPOSE_WITH_AI';
 
-            // Only validate prompt for compose type
-            if (isCompose) {
-                const promptElement = document.getElementById('composePrompt');
-                const prompt = promptElement ? promptElement.value.trim() : '';
-
-                if (!prompt) {
-                    alert('Please describe what you want to communicate in the prompt field.');
-                    if (window.editorInstance) {
-                        window.editorInstance.html.set('');
-                    } else {
-                        const draftContent = document.getElementById('draftContent');
-                        if (draftContent) {
-                            draftContent.innerHTML = '';
-                        }
-                    }
-                    return;
-                }
-            }
+            // No longer validate prompt - allow users to write emails manually without AI assistance
 
             const currentContent = getCurrentEditorContent();
             if (!currentContent.trim()) {
-                alert('Please generate a draft first.');
+                alert('Please write your email content first.');
                 return;
             }
             console.log(currentContent, 'Send EMail:   currentContent------------------------');
@@ -6411,7 +6397,7 @@
         function scheduleEmail() {
             const draft = document.getElementById('draftContent').value;
             if (!draft.trim()) {
-                alert('Please generate a draft first.');
+                alert('Please write your email content first.');
                 return;
             }
 
@@ -8628,26 +8614,14 @@
             const prompt = promptElement ? promptElement.value.trim() : '';
             const tone = toneElement ? toneElement.value : 'professional';
 
-            // Check if this is a compose type (not reply) - only validate prompt for compose
+            // Check if this is a compose type (not reply) - no longer validate prompt
             const modalTitle = document.getElementById('composeModalTitle').textContent;
             const isCompose = modalTitle.includes('Compose with AI') || window.currentComposeType === 'COMPOSE_WITH_AI';
 
-            if (isCompose && !prompt) {
-                alert('Please describe what you want to communicate in the prompt field.');
-                if (window.editorInstance) {
-                    window.editorInstance.html.set('');
-                } else {
-                    const draftContent = document.getElementById('draftContent');
-                    if (draftContent) {
-                        draftContent.innerHTML = '';
-                    }
-                }
-                updateAIEditTogglesState();
-                return;
-            }
+            // Allow users to write emails manually without requiring a prompt
 
             if (!currentContent.trim()) {
-                alert('Please generate a draft first.');
+                alert('Please write your email content first.');
                 if (window.editorInstance) {
                     window.editorInstance.html.set('');
                 } else {
