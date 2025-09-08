@@ -5509,6 +5509,20 @@
                 pluginsEnabled: ['fontFamily', 'fontSize', 'colors', 'lists', 'align', 'paragraphFormat', 'lineHeight', 'entities'],
 
                 events: {
+                    'keydown': function (e) {
+                        if (e.key === 'Enter' || e.keyCode === 13) {
+                            e.preventDefault();
+                            
+                            if(document.getElementById('aiModeToggle').checked) {
+                                removeConvertToSmartBoxBySentences()
+                                addConvertToSmartBoxBySentences()
+                            } else if(document.getElementById('aiInlineModeToggle').checked) {
+                                removeConvertToSmartBoxByParagraphs()
+                                addConvertToSmartBoxByParagraphs()
+                            }
+                            return false;
+                        }
+                    },
                     'contentChanged': function () {
                         clearTimeout(window.editorSyncTimeout);
                         window.editorSyncTimeout = setTimeout(() => {
@@ -5975,6 +5989,8 @@
 
         function addConvertToSmartBoxBySentences() {
             const editor = window.editorInstance;
+
+            editor.selection.save()
             const paragraphs = editor.el.querySelectorAll('p');
 
             paragraphs.forEach(p => {
@@ -6037,6 +6053,8 @@
                 p.innerHTML = '';
                 p.appendChild(frag);
             });
+
+            editor.selection.restore()
         }
 
         function removeConvertToSmartBoxBySentences() { 
@@ -6941,6 +6959,8 @@
         }
 
         function convertToSmartBox(element) {
+            window.editorInstance.selection.save();
+
             if (hoverTimeout) {
                 clearTimeout(hoverTimeout);
             }
@@ -6975,7 +6995,9 @@
     `;
 
             wrapper.appendChild(smartBox);
-            element.parentNode.replaceChild(wrapper, element);
+            // element.parentNode.replaceChild(wrapper, element);
+            element.insertAdjacentElement('beforebegin', wrapper)
+            element.remove()
 
             activeSmartBox = wrapper;
 
@@ -7006,9 +7028,13 @@
                     clearTimeout(hoverTimeout);
                 }
             });
+
+            window.editorInstance.selection.restore()
         }
 
         function convertBackToSentence(wrapper, sentenceId) {
+            window.editorInstance.selection.save()
+
             const content = wrapper.querySelector('.smart-box-content').innerHTML;
             let sentence = null
 
@@ -7017,19 +7043,23 @@
                 sentence = document.createElement('span');
                 sentence.classList.add('ai-sentence');
                 sentence.innerHTML = content;
-                sentence.onclick = function () { convertToSmartBox(this); };
+                sentence.removeEventListener('click', handleParagraphClick);
+                sentence.addEventListener('click', handleParagraphClick);
             }
             else {
                 sentence = document.createElement('p');
                 sentence.setAttribute('style', 'margin-bottom: 16px;');
                 sentence.classList.add('ai-sentence');
                 sentence.innerHTML = content;
-                // sentence.dataset.id = sentenceId;
-                sentence.onclick = function () { convertToSmartBox(this); };
+                sentence.dataset.id = sentenceId;
+                sentence.removeEventListener('click', handleParagraphClick);
+                sentence.addEventListener('click', handleParagraphClick);
             }
 
             wrapper.parentNode.replaceChild(sentence, wrapper);
             activeSmartBox = null;
+
+            window.editorInstance.selection.restore()
         }
 
         // Helper function to extract context for AI generation
